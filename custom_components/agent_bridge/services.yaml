@@ -1,0 +1,67 @@
+send_message:
+  name: Send Message
+  description: Send a message to a bridge agent and receive a response.
+  fields:
+    message:
+      name: Message
+      description: The message text to send.
+      required: true
+      example: "What's the weather like?"
+      selector:
+        text:
+    agent_id:
+      name: Agent ID
+      description: The agent to send the message to. Defaults to the configured default agent.
+      required: false
+      example: "cora"
+      selector:
+        text:
+    session_id:
+      name: Session ID
+      description: Optional session ID for multi-turn context.
+      required: false
+      selector:
+        text:
+
+invoke_tool:
+  name: Invoke Tool
+  description: Invoke a tool on a specific bridge agent.
+  fields:
+    agent_id:
+      name: Agent ID
+      description: The agent to invoke the tool on.
+      required: true
+      example: "cora"
+      selector:
+        text:
+    tool_name:
+      name: Tool Name
+      description: The name of the tool to invoke.
+      required: true
+      example: "web_search"
+      selector:
+        text:
+    args:
+      name: Arguments
+      description: Optional arguments for the tool.
+      required: false
+      selector:
+        object:
+
+broadcast:
+  name: Broadcast
+  description: Send a message to all bridge agents, or a tagged subset.
+  fields:
+    message:
+      name: Message
+      description: The message text to broadcast.
+      required: true
+      example: "System maintenance starting in 5 minutes."
+      selector:
+        text:
+    tags:
+      name: Tags
+      description: Optional list of tags to filter which agents receive the message.
+      required: false
+      selector:
+        object:

@@ -1,0 +1,49 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Agent Bridge",
+                "description": "Connect to your Agent Bridge instance.",
+                "data": {
+                    "bridge_url": "Bridge URL",
+                    "bridge_token": "API Token"
+                }
+            },
+            "agents": {
+                "title": "Select Agents",
+                "description": "Choose the default agents for chat and voice.",
+                "data": {
+                    "default_agent": "Default Chat Agent",
+                    "voice_agent": "Voice Agent"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Cannot connect to bridge",
+            "invalid_auth": "Invalid API token",
+            "no_agents": "No agents found on bridge",
+            "unknown": "An unexpected error occurred"
+        },
+        "abort": {
+            "already_configured": "Agent Bridge is already configured"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Agent Bridge Options",
+                "data": {
+                    "default_agent": "Default Chat Agent",
+                    "voice_agent": "Voice Agent",
+                    "context_max_chars": "Max Entity Context (chars)",
+                    "context_strategy": "Context Overflow Strategy",
+                    "enable_per_agent_entities": "Create per-agent entities",
+                    "enable_tool_calls": "Allow tool execution",
+                    "thinking_timeout": "Agent Response Timeout (seconds)",
+                    "ssl_verify": "Verify SSL Certificates",
+                    "debug_logging": "Voice Debug Logging"
+                }
+            }
+        }
+    }
+}
