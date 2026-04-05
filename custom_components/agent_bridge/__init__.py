@@ -15,6 +15,7 @@ from .client import BridgeClient
 from .const import (
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
+    CONF_ENABLE_PER_AGENT,
     CONF_SSL_VERIFY,
     CONF_THINKING_TIMEOUT,
     DEFAULT_THINKING_TIMEOUT,
@@ -94,6 +95,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await async_setup_conversation_agent(hass, entry)
 
+    # Register per-agent conversation agents if enabled
+    if entry.options.get(CONF_ENABLE_PER_AGENT, False):
+        from .conversation import async_setup_per_agent_conversations
+
+        agents = coordinator.data.get("agents", []) if coordinator.data else []
+        await async_setup_per_agent_conversations(hass, entry, agents)
+
+    # Listen for options updates (e.g. toggling per-agent entities)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+
     # Register services
     from .services import async_setup_services
 
@@ -145,3 +156,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unload_ok
+
+
+async def _async_options_updated(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Handle options update -- reload the integration to apply changes."""
+    await hass.config_entries.async_reload(entry.entry_id)
