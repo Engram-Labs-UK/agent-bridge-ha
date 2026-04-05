@@ -32,10 +32,10 @@ class TestSessionManager:
         sm = SessionManager(hass)
         sm._store = MagicMock()
         sm._store.async_load = AsyncMock(
-            return_value={"sessions": {"cora": "agent:cora:assist_abc123"}}
+            return_value={"sessions": {"cora": "agent-cora-assist_abc123"}}
         )
         await sm.async_load()
-        assert sm.sessions["cora"] == "agent:cora:assist_abc123"
+        assert sm.sessions["cora"] == "agent-cora-assist_abc123"
 
     @pytest.mark.asyncio
     async def test_save(self):
@@ -43,24 +43,24 @@ class TestSessionManager:
         sm = SessionManager(hass)
         sm._store = MagicMock()
         sm._store.async_save = AsyncMock()
-        sm._sessions = {"cora": "agent:cora:assist_abc123"}
+        sm._sessions = {"cora": "agent-cora-assist_abc123"}
         await sm.async_save()
         sm._store.async_save.assert_called_once_with(
-            {"sessions": {"cora": "agent:cora:assist_abc123"}}
+            {"sessions": {"cora": "agent-cora-assist_abc123"}}
         )
 
     def test_get_or_create_new(self):
         hass = MagicMock()
         sm = SessionManager(hass)
         session_id = sm.get_or_create("cora")
-        assert session_id.startswith("agent:cora:assist_")
-        assert len(session_id) > len("agent:cora:assist_")
+        assert session_id.startswith("agent-cora-assist_")
+        assert len(session_id) > len("agent-cora-assist_")
 
     def test_get_or_create_existing(self):
         hass = MagicMock()
         sm = SessionManager(hass)
-        sm._sessions = {"cora": "agent:cora:assist_existing"}
-        assert sm.get_or_create("cora") == "agent:cora:assist_existing"
+        sm._sessions = {"cora": "agent-cora-assist_existing"}
+        assert sm.get_or_create("cora") == "agent-cora-assist_existing"
 
     def test_get_or_create_idempotent(self):
         hass = MagicMock()

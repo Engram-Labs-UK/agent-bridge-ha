@@ -50,7 +50,7 @@ class SessionManager:
         """Get existing session ID for an agent, or create a new one."""
         if agent_id not in self._sessions:
             random_hex = secrets.token_hex(4)
-            self._sessions[agent_id] = f"agent:{agent_id}:assist_{random_hex}"
+            self._sessions[agent_id] = f"agent-{agent_id}-assist_{random_hex}"
         return self._sessions[agent_id]
 
     @property

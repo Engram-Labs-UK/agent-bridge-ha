@@ -117,7 +117,7 @@ class TestAgentBridgeConversationAgent:
             result = await agent.async_process(user_input)
 
         assert result.response.speech["plain"]["speech"] == "I've turned on the kitchen lights."
-        assert result.conversation_id.startswith("agent:cora:")
+        assert result.conversation_id.startswith("agent-cora-")
 
     @pytest.mark.asyncio
     async def test_process_voice_input(self):
@@ -391,7 +391,7 @@ class TestPerAgentConversationAgent:
             user_input = _make_conversation_input()
             result = await agent.async_process(user_input)
 
-        assert result.conversation_id.startswith("agent:claude:")
+        assert result.conversation_id.startswith("agent-claude-")
 
 
 class TestSetupAndTeardown:
