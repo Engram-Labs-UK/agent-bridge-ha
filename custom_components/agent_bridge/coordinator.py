@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import logging
+from datetime import UTC, datetime
 from typing import Any, TypedDict
 
 from homeassistant.core import HomeAssistant
@@ -151,7 +151,7 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 agent_count_healthy=healthy,
                 agent_count_total=total,
                 agents=agents,
-                last_poll=datetime.now(tz=timezone.utc).isoformat(),
+                last_poll=datetime.now(tz=UTC).isoformat(),
             )
 
             self._consecutive_failures = 0
@@ -170,7 +170,7 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 return CoordinatorData(
                     **{
                         **self._last_good_data,
-                        "last_poll": datetime.now(tz=timezone.utc).isoformat(),
+                        "last_poll": datetime.now(tz=UTC).isoformat(),
                     }
                 )
 
@@ -187,14 +187,12 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 agent_count_healthy=0,
                 agent_count_total=0,
                 agents=self._previous_agents,
-                last_poll=datetime.now(tz=timezone.utc).isoformat(),
+                last_poll=datetime.now(tz=UTC).isoformat(),
             )
 
     async def async_push_webhook_data(self, data: dict[str, Any]) -> None:
         """Accept pushed data from a webhook event, bypassing the poll cycle."""
         if not self.data or "status" not in data:
             return
-        updated = CoordinatorData(
-            **{**self.data, "bridge_status": data["status"]}
-        )
+        updated = CoordinatorData(**{**self.data, "bridge_status": data["status"]})
         self.async_set_updated_data(updated)

@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
@@ -53,9 +52,7 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
         self._bridge_token: str = ""
         self._agents: list[dict[str, Any]] = []
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Step 1: Bridge URL and token."""
         errors: dict[str, str] = {}
 
@@ -91,9 +88,7 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_agents(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_agents(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Step 2: Select default and voice agents."""
         if user_input is not None:
             await self.async_set_unique_id(DOMAIN)
@@ -121,9 +116,7 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
         agent_options = {
-            agent[
-                "id"
-            ]: f"{agent.get('name', agent['id'])} ({agent.get('status', 'unknown')})"
+            agent["id"]: f"{agent.get('name', agent['id'])} ({agent.get('status', 'unknown')})"
             for agent in self._agents
         }
 
@@ -153,9 +146,7 @@ class AgentBridgeOptionsFlow(OptionsFlow):
         """Initialise options flow."""
         self._config_entry = config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -168,15 +159,11 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                 {
                     vol.Optional(
                         CONF_CONTEXT_MAX_CHARS,
-                        default=options.get(
-                            CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS
-                        ),
+                        default=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
                     ): vol.All(int, vol.Range(min=1000, max=200000)),
                     vol.Optional(
                         CONF_CONTEXT_STRATEGY,
-                        default=options.get(
-                            CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY
-                        ),
+                        default=options.get(CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY),
                     ): vol.In(["truncate", "clear"]),
                     vol.Optional(
                         CONF_ENABLE_PER_AGENT,
@@ -188,9 +175,7 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                     ): bool,
                     vol.Optional(
                         CONF_THINKING_TIMEOUT,
-                        default=options.get(
-                            CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT
-                        ),
+                        default=options.get(CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT),
                     ): vol.All(int, vol.Range(min=10, max=3600)),
                     vol.Optional(
                         CONF_SSL_VERIFY,

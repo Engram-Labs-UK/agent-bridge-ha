@@ -65,7 +65,7 @@ async def _execute_single_service(
             "entity_id": entity_id,
             "error": f"Service call timed out after {timeout}s",
         }
-    except Exception as err:  # noqa: BLE001
+    except Exception as err:
         return {
             "success": False,
             "entity_id": entity_id,

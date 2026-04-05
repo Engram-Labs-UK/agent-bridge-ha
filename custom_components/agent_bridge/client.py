@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -85,18 +84,14 @@ class BridgeClient:
                 ssl=self._ssl,
             ) as resp:
                 if resp.status in (401, 403):
-                    raise BridgeAuthError(
-                        f"Bridge returned {resp.status}: authentication failed"
-                    )
+                    raise BridgeAuthError(f"Bridge returned {resp.status}: authentication failed")
 
                 if resp.content_type and "json" in resp.content_type:
                     data = await resp.json()
                 else:
                     text = await resp.text()
                     if not text:
-                        raise BridgeError(
-                            "EMPTY_RESPONSE", "Empty response from bridge"
-                        )
+                        raise BridgeError("EMPTY_RESPONSE", "Empty response from bridge")
                     raise BridgeError(
                         "INVALID_RESPONSE",
                         f"Non-JSON response from bridge: {text[:200]}",
@@ -105,16 +100,14 @@ class BridgeClient:
                 if resp.status >= 400:
                     error = data.get("error", {}) if isinstance(data, dict) else {}
                     code = error.get("code", f"HTTP_{resp.status}")
-                    message = error.get(
-                        "message", f"Bridge returned HTTP {resp.status}"
-                    )
+                    message = error.get("message", f"Bridge returned HTTP {resp.status}")
                     raise BridgeError(code, message)
 
                 return data
 
         except BridgeError:
             raise
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             raise BridgeTimeoutError(
                 f"Bridge request timed out after {request_timeout.total}s"
             ) from err
@@ -203,10 +196,8 @@ class BridgeClient:
                 timeout=timeout,
                 ssl=self._ssl,
             )
-        except asyncio.TimeoutError as err:
-            raise BridgeTimeoutError(
-                f"Streaming request timed out after {timeout_val}s"
-            ) from err
+        except TimeoutError as err:
+            raise BridgeTimeoutError(f"Streaming request timed out after {timeout_val}s") from err
         except aiohttp.ClientError as err:
             raise BridgeConnectionError(
                 f"Cannot connect to bridge at {self._base_url}: {err}"
@@ -214,9 +205,7 @@ class BridgeClient:
 
         if resp.status in (401, 403):
             resp.close()
-            raise BridgeAuthError(
-                f"Bridge returned {resp.status}: authentication failed"
-            )
+            raise BridgeAuthError(f"Bridge returned {resp.status}: authentication failed")
         if resp.status >= 400:
             resp.close()
             raise BridgeError(
@@ -240,7 +229,7 @@ class BridgeClient:
                 if not line or not line.startswith("data:"):
                     continue
 
-                data_str = line[len("data:"):].strip()
+                data_str = line[len("data:") :].strip()
 
                 if data_str == "[DONE]":
                     return

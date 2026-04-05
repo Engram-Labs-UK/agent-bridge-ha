@@ -1,15 +1,28 @@
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
 *.egg-info/
+*.egg
 dist/
 build/
 .venv/
+env/
+venv/
 
 # Testing
 .coverage
+.coverage.*
 .pytest_cache/
 htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Type checking / linting
+.mypy_cache/
+.ruff_cache/
 
 # IDE
 .idea/
@@ -19,6 +32,12 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
 
 # HA
 .HA_VERSION

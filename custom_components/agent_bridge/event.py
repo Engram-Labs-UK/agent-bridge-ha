@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from homeassistant.components.event import EventEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -29,7 +31,7 @@ class MessageReceivedEvent(EventEntity):
     """Event entity that fires when an agent responds."""
 
     _attr_has_entity_name = True
-    _attr_event_types = ["message_received"]
+    _attr_event_types: ClassVar[list[str]] = ["message_received"]
 
     def __init__(self, entry: ConfigEntry) -> None:
         self._attr_unique_id = f"{entry.entry_id}_message_received"
@@ -70,7 +72,7 @@ class ToolInvokedEvent(EventEntity):
     """Event entity that fires when a tool is invoked."""
 
     _attr_has_entity_name = True
-    _attr_event_types = ["tool_invoked_ok", "tool_invoked_error"]
+    _attr_event_types: ClassVar[list[str]] = ["tool_invoked_ok", "tool_invoked_error"]
 
     def __init__(self, entry: ConfigEntry) -> None:
         self._attr_unique_id = f"{entry.entry_id}_tool_invoked"
@@ -89,9 +91,7 @@ class ToolInvokedEvent(EventEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register event listener when entity is added."""
-        self.async_on_remove(
-            self.hass.bus.async_listen(EVENT_TOOL_INVOKED, self._handle_event)
-        )
+        self.async_on_remove(self.hass.bus.async_listen(EVENT_TOOL_INVOKED, self._handle_event))
 
     @callback
     def _handle_event(self, event) -> None:

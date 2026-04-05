@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from aiohttp.web import Request, Response
-
 from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant
 
@@ -53,25 +51,19 @@ async def async_register_with_bridge(
 
     try:
         ha_url = get_url(hass, allow_internal=True, allow_external=False)
-    except Exception:  # noqa: BLE001
-        _LOGGER.info(
-            "No HA URL available for webhook registration, using polling only"
-        )
+    except Exception:
+        _LOGGER.info("No HA URL available for webhook registration, using polling only")
         return None
 
     callback_url = f"{ha_url}/api/webhook/{webhook_id}"
 
     try:
-        result = await client.register_webhook(
-            callback_url, ["agent:health-changed"]
-        )
+        result = await client.register_webhook(callback_url, ["agent:health-changed"])
         sub_id = result.get("id") if isinstance(result, dict) else None
         _LOGGER.info("Registered bridge webhook subscription: %s", sub_id)
         return sub_id
-    except Exception:  # noqa: BLE001
-        _LOGGER.warning(
-            "Bridge webhook registration failed, continuing with polling only"
-        )
+    except Exception:
+        _LOGGER.warning("Bridge webhook registration failed, continuing with polling only")
         return None
 
 
@@ -89,13 +81,9 @@ async def async_unregister_webhook(
         if client:
             try:
                 await client.unregister_webhook(subscription_id)
-                _LOGGER.info(
-                    "Unregistered bridge webhook: %s", subscription_id
-                )
-            except Exception:  # noqa: BLE001
-                _LOGGER.warning(
-                    "Failed to unregister bridge webhook: %s", subscription_id
-                )
+                _LOGGER.info("Unregistered bridge webhook: %s", subscription_id)
+            except Exception:
+                _LOGGER.warning("Failed to unregister bridge webhook: %s", subscription_id)
 
     # Unregister from HA
     if webhook_id:
@@ -111,7 +99,7 @@ async def _handle_webhook(
     """Handle incoming webhook events from the bridge."""
     try:
         payload = await request.json()
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.warning("Invalid webhook payload received")
         return Response(status=400)
 

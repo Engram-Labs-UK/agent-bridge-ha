@@ -105,9 +105,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     webhook_id = await async_register_webhook(hass, entry.entry_id)
     subscription_id = None
     if webhook_id:
-        subscription_id = await async_register_with_bridge(
-            hass, entry.entry_id, webhook_id
-        )
+        subscription_id = await async_register_with_bridge(hass, entry.entry_id, webhook_id)
     hass.data[DOMAIN][entry.entry_id]["webhook_id"] = webhook_id
     hass.data[DOMAIN][entry.entry_id]["webhook_subscription_id"] = subscription_id
 

@@ -10,7 +10,9 @@ from homeassistant.components.conversation import AbstractConversationAgent
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar, device_registry as dr, intent
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import intent
 
 from .client import BridgeClient, BridgeError
 from .const import (
@@ -110,11 +112,7 @@ def _detect_continuation(response_text: str) -> bool:
             return False
 
     # Check for continuation phrases
-    for phrase in DEFAULT_CONTINUATION_PHRASES:
-        if phrase.lower() in text_lower:
-            return True
-
-    return False
+    return any(phrase.lower() in text_lower for phrase in DEFAULT_CONTINUATION_PHRASES)
 
 
 async def _stream_chat(
@@ -247,8 +245,11 @@ class AgentBridgeConversationAgent(AbstractConversationAgent):
                 # Pure streaming (no tool loop) -- simplest path
                 try:
                     streamed = await _stream_chat(
-                        self.client, messages,
-                        agent=agent_id, channel=channel, metadata=metadata,
+                        self.client,
+                        messages,
+                        agent=agent_id,
+                        channel=channel,
+                        metadata=metadata,
                     )
                     if streamed is not None:
                         response_text = streamed
@@ -536,9 +537,7 @@ async def async_setup_per_agent_conversations(
 
         if agent_id not in per_agent:
             agent_name = agent_info.get("name", agent_id)
-            per_agent_conv = PerAgentConversationAgent(
-                hass, entry, client, agent_id, agent_name
-            )
+            per_agent_conv = PerAgentConversationAgent(hass, entry, client, agent_id, agent_name)
             # Register with HA using a unique agent ID
             conversation.async_set_agent(
                 hass, entry, per_agent_conv, agent_id=f"{DOMAIN}_{agent_id}"

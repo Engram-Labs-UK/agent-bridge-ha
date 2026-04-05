@@ -22,9 +22,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Agent Bridge binary sensor entities."""
-    coordinator: AgentBridgeCoordinator = hass.data[DOMAIN][entry.entry_id][
-        "coordinator"
-    ]
+    coordinator: AgentBridgeCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     async_add_entities(
         [
@@ -33,9 +31,7 @@ async def async_setup_entry(
     )
 
 
-class BridgeConnectedSensor(
-    CoordinatorEntity[AgentBridgeCoordinator], BinarySensorEntity
-):
+class BridgeConnectedSensor(CoordinatorEntity[AgentBridgeCoordinator], BinarySensorEntity):
     """Binary sensor showing bridge connectivity."""
 
     _attr_has_entity_name = True
@@ -68,9 +64,7 @@ class BridgeConnectedSensor(
         return None
 
 
-class PerAgentHealthSensor(
-    CoordinatorEntity[AgentBridgeCoordinator], BinarySensorEntity
-):
+class PerAgentHealthSensor(CoordinatorEntity[AgentBridgeCoordinator], BinarySensorEntity):
     """Binary sensor showing per-agent health status."""
 
     _attr_has_entity_name = True
