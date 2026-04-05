@@ -34,7 +34,7 @@ def mock_client():
 @pytest.fixture
 def coordinator(mock_hass, mock_client):
     coord = AgentBridgeCoordinator(
-        mock_hass, mock_client, poll_interval=30, discovery_interval=300
+        mock_hass, mock_client, poll_interval=30, discovery_interval=0
     )
     return coord
 
@@ -74,7 +74,7 @@ class TestAsyncUpdateData:
     @pytest.mark.asyncio
     async def test_successful_poll(self, coordinator, mock_client):
         # Force discovery by setting last_discovery to 0
-        coordinator._last_discovery = 0
+
         data = await coordinator._async_update_data()
         assert data["connected"] is True
         assert data["bridge_status"] == "ok"
@@ -85,7 +85,7 @@ class TestAsyncUpdateData:
     @pytest.mark.asyncio
     async def test_cache_on_first_failure(self, coordinator, mock_client):
         # First successful poll
-        coordinator._last_discovery = 0
+
         good_data = await coordinator._async_update_data()
         assert good_data["connected"] is True
 
@@ -113,7 +113,7 @@ class TestAsyncUpdateData:
     @pytest.mark.asyncio
     async def test_cache_survives_3_failures(self, coordinator, mock_client):
         # First successful poll
-        coordinator._last_discovery = 0
+
         await coordinator._async_update_data()
 
         # Fail 3 times
@@ -130,7 +130,7 @@ class TestAsyncUpdateData:
 
     @pytest.mark.asyncio
     async def test_recovery_resets_failures(self, coordinator, mock_client):
-        coordinator._last_discovery = 0
+
         await coordinator._async_update_data()
 
         # Fail once
@@ -150,7 +150,7 @@ class TestAgentDiffDetection:
 
     @pytest.mark.asyncio
     async def test_new_agent_fires_event(self, coordinator, mock_client, mock_hass):
-        coordinator._last_discovery = 0
+
         coordinator._previous_agents = []
         await coordinator._async_update_data()
 
@@ -161,7 +161,7 @@ class TestAgentDiffDetection:
 
     @pytest.mark.asyncio
     async def test_removed_agent_fires_event(self, coordinator, mock_client, mock_hass):
-        coordinator._last_discovery = 0
+
         coordinator._previous_agents = [
             AgentInfo(
                 id="old_agent", name="Old", description="", healthy=True,
@@ -179,11 +179,13 @@ class TestAgentDiffDetection:
     @pytest.mark.asyncio
     async def test_discovery_interval_respected(self, coordinator, mock_client):
         import time
-        # Set last discovery to now so it skips
+        # Override interval to something large and set last discovery to now
+        coordinator._discovery_interval = 9999
         coordinator._last_discovery = time.monotonic()
         coordinator._previous_agents = [
             coordinator._parse_agent(a) for a in DISCOVERY_THREE_AGENTS
         ]
+        mock_client.discover.reset_mock()
         await coordinator._async_update_data()
         # discover should NOT be called since interval hasn't passed
         mock_client.discover.assert_not_called()
