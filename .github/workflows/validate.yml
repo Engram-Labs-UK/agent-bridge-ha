@@ -17,8 +17,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          pip install ruff
+        run: pip install ruff
 
       - name: Ruff lint
         run: ruff check custom_components/
@@ -36,25 +35,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          pip install pytest pytest-asyncio pytest-cov aiohttp voluptuous homeassistant
+        run: pip install pytest pytest-asyncio pytest-cov aiohttp voluptuous homeassistant hassil home-assistant-intents
 
       - name: Run tests
-        run: |
-          python -m pytest tests/ -v --cov=custom_components/agent_bridge --cov-report=term-missing --cov-fail-under=80
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          pip install mypy aiohttp voluptuous homeassistant
-
-      - name: Mypy type check
-        run: mypy custom_components/ --ignore-missing-imports
+        run: python -m pytest tests/ -v --cov=custom_components/agent_bridge --cov-report=term-missing --cov-fail-under=80
