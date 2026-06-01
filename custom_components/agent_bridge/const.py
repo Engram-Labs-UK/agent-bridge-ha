@@ -31,11 +31,24 @@ MAX_ENTITIES = 250
 MAX_TEXT_DEPTH = 8  # recursive response text extraction depth
 MAX_TOOL_ITERATIONS = 10  # tool call loop cap (ADR-005)
 
-# Event types
+# Event types (HA bus)
 EVENT_MESSAGE_RECEIVED = f"{DOMAIN}_message_received"
 EVENT_TOOL_INVOKED = f"{DOMAIN}_tool_invoked"
 EVENT_AGENT_DISCOVERED = f"{DOMAIN}_agent_discovered"
 EVENT_AGENT_REMOVED = f"{DOMAIN}_agent_removed"
+EVENT_BRIDGE_UPGRADED = f"{DOMAIN}_bridge_upgraded"
+
+# Bridge webhook event catalogue (v4.36 -- US0024/G10).
+# bridge:upgraded is the drift signal the CR-0002 audit is about; it must be
+# observed, not polled for.
+BRIDGE_WEBHOOK_EVENTS = (
+    "agent:registered",
+    "agent:unregistered",
+    "agent:updated",
+    "agent:health-changed",
+    "message:error",
+    "bridge:upgraded",
+)
 
 # Response text extraction priority keys
 TEXT_PRIORITY_KEYS = ("text", "content", "message", "output_text")

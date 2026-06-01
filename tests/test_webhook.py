@@ -50,10 +50,17 @@ class TestAsyncRegisterWithBridge:
             result = await async_register_with_bridge(hass, "entry_1", "wh_123")
 
         assert result == "sub_123"
-        client.register_webhook.assert_called_once_with(
-            "http://ha.local:8123/api/webhook/wh_123",
-            ["agent:health-changed"],
-        )
+        # US0024/AC2: subscribe to the full v4.36 catalogue, not just one event.
+        call_url, call_events = client.register_webhook.call_args[0]
+        assert call_url == "http://ha.local:8123/api/webhook/wh_123"
+        assert set(call_events) >= {
+            "agent:registered",
+            "agent:unregistered",
+            "agent:updated",
+            "agent:health-changed",
+            "message:error",
+            "bridge:upgraded",
+        }
 
     @pytest.mark.asyncio
     async def test_no_ha_url(self):
@@ -237,3 +244,103 @@ class TestHandleWebhook:
         # Should not crash or call update
         await coord.async_push_webhook_data({"status": "ok"})
         coord.async_set_updated_data.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_bridge_upgraded_fires_ha_event(self):
+        """US0024/AC3: bridge:upgraded routes to an HA event for drift detection."""
+        from custom_components.agent_bridge.const import EVENT_BRIDGE_UPGRADED
+
+        hass = MagicMock()
+        hass.bus.async_fire = MagicMock()
+        hass.data = {DOMAIN: {}}
+
+        request = MagicMock()
+        request.json = AsyncMock(
+            return_value={
+                "event": "bridge:upgraded",
+                "data": {"version": "4.37.0", "previous": "4.36.0"},
+            }
+        )
+
+        response = await _handle_webhook(hass, "wh_123", request)
+
+        assert response.status == 200
+        hass.bus.async_fire.assert_called_once_with(
+            EVENT_BRIDGE_UPGRADED, {"version": "4.37.0", "previous": "4.36.0"}
+        )
+
+    @pytest.mark.asyncio
+    async def test_roster_event_triggers_refresh(self):
+        """agent:registered should pull a fresh discovery, not wait on the poll."""
+        hass = MagicMock()
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        hass.data = {DOMAIN: {"entry_1": {"coordinator": coordinator}}}
+
+        request = MagicMock()
+        request.json = AsyncMock(
+            return_value={"event": "agent:registered", "data": {"agentId": "eve"}}
+        )
+
+        await _handle_webhook(hass, "wh_123", request)
+        coordinator.async_request_refresh.assert_called_once()
+
+
+class TestPerAgentHealthPush:
+    """US0024/AC1: {agentId, healthy} updates that agent's flag + healthy count."""
+
+    @pytest.mark.asyncio
+    async def test_agent_health_changed_updates_state(self):
+        from custom_components.agent_bridge.coordinator import (
+            AgentBridgeCoordinator,
+            CoordinatorData,
+        )
+
+        hass = MagicMock()
+        coord = AgentBridgeCoordinator(hass, MagicMock())
+        coord.data = CoordinatorData(
+            connected=True,
+            bridge_status="ok",
+            bridge_version="4.36.0",
+            bridge_uptime=1000,
+            agent_count_healthy=2,
+            agent_count_total=2,
+            agents=[
+                {"id": "cora", "name": "Cora", "description": "", "healthy": True,
+                 "adapter": "", "capabilities": {}, "tags": []},
+                {"id": "eve", "name": "Eve", "description": "", "healthy": True,
+                 "adapter": "", "capabilities": {}, "tags": []},
+            ],
+            last_poll="2026-04-05T00:00:00Z",
+        )
+        coord.async_set_updated_data = MagicMock()
+
+        await coord.async_push_webhook_data({"agentId": "eve", "healthy": False})
+
+        coord.async_set_updated_data.assert_called_once()
+        updated = coord.async_set_updated_data.call_args[0][0]
+        eve = next(a for a in updated["agents"] if a["id"] == "eve")
+        assert eve["healthy"] is False
+        assert updated["agent_count_healthy"] == 1
+
+    @pytest.mark.asyncio
+    async def test_unknown_agent_requests_refresh(self):
+        from custom_components.agent_bridge.coordinator import (
+            AgentBridgeCoordinator,
+            CoordinatorData,
+        )
+
+        hass = MagicMock()
+        coord = AgentBridgeCoordinator(hass, MagicMock())
+        coord.data = CoordinatorData(
+            connected=True, bridge_status="ok", bridge_version="4.36.0",
+            bridge_uptime=1, agent_count_healthy=0, agent_count_total=0,
+            agents=[], last_poll="2026-04-05T00:00:00Z",
+        )
+        coord.async_set_updated_data = MagicMock()
+        coord.async_request_refresh = AsyncMock()
+
+        await coord.async_push_webhook_data({"agentId": "ghost", "healthy": False})
+
+        coord.async_set_updated_data.assert_not_called()
+        coord.async_request_refresh.assert_called_once()

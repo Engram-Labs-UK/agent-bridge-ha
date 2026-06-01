@@ -45,6 +45,94 @@ def _sse_line(content_text: str) -> str:
     return f"data: {json.dumps(chunk)}\n"
 
 
+def _v436_message(text: str) -> list[str]:
+    """Build a v4.36 message frame: event:message then data:{text}."""
+    return ["event:message\n", f'data:{json.dumps({"text": text})}\n', "\n"]
+
+
+class TestChatStreamV436:
+    """US0023/G7: v4.36 SSE shape (event:message {text} + event:done)."""
+
+    @pytest.mark.asyncio
+    async def test_yields_text_delta(self):
+        session = MagicMock(spec=aiohttp.ClientSession)
+        client = BridgeClient(session, "http://bridge:18780", "tok")
+
+        sse_resp = MockSSEResponse(
+            [*_v436_message("hi"), *_v436_message(" there"), "event:done\n", "\n"]
+        )
+        session.request = AsyncMock(return_value=sse_resp)
+
+        parts = [
+            d
+            async for d in await client.chat_stream(
+                [{"role": "user", "content": "Hi"}], agent="cora"
+            )
+        ]
+        assert parts == ["hi", " there"]
+
+    @pytest.mark.asyncio
+    async def test_event_done_terminates(self):
+        session = MagicMock(spec=aiohttp.ClientSession)
+        client = BridgeClient(session, "http://bridge:18780", "tok")
+
+        sse_resp = MockSSEResponse(
+            [*_v436_message("first"), "event:done\n", "\n", *_v436_message("after")]
+        )
+        session.request = AsyncMock(return_value=sse_resp)
+
+        parts = [
+            d async for d in await client.chat_stream([{"role": "user", "content": "Hi"}])
+        ]
+        assert parts == ["first"]
+
+    @pytest.mark.asyncio
+    async def test_socket_close_terminates_without_done(self):
+        """No [DONE] sentinel, no event:done -- a bare socket close ends cleanly."""
+        session = MagicMock(spec=aiohttp.ClientSession)
+        client = BridgeClient(session, "http://bridge:18780", "tok")
+
+        sse_resp = MockSSEResponse([*_v436_message("only")])  # stream just ends
+        session.request = AsyncMock(return_value=sse_resp)
+
+        parts = [
+            d async for d in await client.chat_stream([{"role": "user", "content": "Hi"}])
+        ]
+        assert parts == ["only"]
+        assert sse_resp._closed
+
+
+class TestStreamFailSafe:
+    """US0023/AC3: real stream faults propagate (caller logs + falls back), not swallowed.
+
+    ``_stream_chat`` must NOT swallow exceptions -- the caller (async_process)
+    owns the log-at-error + fall-back-to-non-streaming behaviour. These tests pin
+    that the helper re-raises rather than hiding the fault.
+    """
+
+    @pytest.mark.asyncio
+    async def test_runtime_error_propagates(self):
+        client = MagicMock()
+
+        async def boom_stream(*args, **kwargs):
+            raise RuntimeError("stream exploded")
+
+        client.chat_stream = boom_stream
+        with pytest.raises(RuntimeError):
+            await _stream_chat(client, [{"role": "user", "content": "Hi"}])
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_not_swallowed(self):
+        client = MagicMock()
+
+        async def cancel_stream(*args, **kwargs):
+            raise asyncio.CancelledError()
+
+        client.chat_stream = cancel_stream
+        with pytest.raises(asyncio.CancelledError):
+            await _stream_chat(client, [{"role": "user", "content": "Hi"}])
+
+
 class TestChatStream:
 
     @pytest.mark.asyncio

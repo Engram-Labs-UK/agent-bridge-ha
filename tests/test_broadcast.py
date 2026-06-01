@@ -80,6 +80,30 @@ class TestBroadcastService:
         client.broadcast.assert_called_once_with("Hello", tags=["primary"])
 
     @pytest.mark.asyncio
+    async def test_responses_object_keyed_by_agent_id(self, mock_hass):
+        """US0022/G5: bridge returns responses as an OBJECT keyed by agentId."""
+        client = mock_hass.data[DOMAIN]["entry_1"]["client"]
+        client.broadcast = AsyncMock(
+            return_value={
+                "responses": {
+                    "cora": {"content": "Acknowledged."},
+                    "eve": {"content": "On it."},
+                }
+            }
+        )
+
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"message": "status report"}
+
+        result = await async_handle_broadcast(call)
+
+        assert isinstance(result["responses"], list)
+        by_agent = {r["agent_id"]: r for r in result["responses"]}
+        assert by_agent.keys() == {"cora", "eve"}
+        assert by_agent["cora"]["content"] == "Acknowledged."
+
+    @pytest.mark.asyncio
     async def test_bridge_error(self, mock_hass):
         client = mock_hass.data[DOMAIN]["entry_1"]["client"]
         client.broadcast = AsyncMock(

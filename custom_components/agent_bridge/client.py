@@ -172,8 +172,10 @@ class BridgeClient:
     ) -> AsyncIterator[str]:
         """Send a streaming chat completion request. Yields content delta strings.
 
-        SSE format: data: {"choices": [{"delta": {"content": "word"}}]}
-        Terminates on: data: [DONE]
+        v4.36 SSE format: ``event:message`` / ``data:{"text":"word"}`` frames,
+        terminated by an ``event:done`` frame or socket close. The legacy OpenAI
+        ``data:{"choices":[{"delta":{"content":...}}]}`` + ``data:[DONE]`` shape is
+        still accepted for backward compatibility (US0023/G7).
         """
         body: dict[str, Any] = {"messages": messages, "stream": True}
         if agent:
@@ -219,18 +221,37 @@ class BridgeClient:
         self,
         resp: aiohttp.ClientResponse,
     ) -> AsyncIterator[str]:
-        """Iterate over SSE lines, yielding content deltas."""
+        """Iterate over SSE frames, yielding content deltas.
+
+        Tracks the SSE ``event:`` field across lines so the v4.36 bridge's
+        ``event:message`` / ``data:{"text":...}`` frames are parsed and
+        ``event:done`` terminates the stream — without relying on the
+        OpenAI ``data:[DONE]`` sentinel the bridge never sends. The legacy
+        ``choices[].delta.content`` + ``[DONE]`` shape still works (US0023/G7).
+        """
         import json as _json
 
+        event_type = "message"
         try:
             async for raw_line in resp.content:
                 line = raw_line.decode("utf-8", errors="replace").strip()
 
-                if not line or not line.startswith("data:"):
+                if not line:
+                    # Blank line ends an SSE frame; reset to the default event.
+                    event_type = "message"
+                    continue
+                if line.startswith(":"):
+                    # SSE comment.
+                    continue
+                if line.startswith("event:"):
+                    event_type = line[len("event:") :].strip()
+                    if event_type == "done":
+                        return
+                    continue
+                if not line.startswith("data:"):
                     continue
 
                 data_str = line[len("data:") :].strip()
-
                 if data_str == "[DONE]":
                     return
 
@@ -239,14 +260,22 @@ class BridgeClient:
                 except (ValueError, TypeError):
                     continue
 
-                choices = chunk.get("choices", [])
-                if not choices:
+                # Terminal can also be carried as event:done's data or {"done":true}.
+                if event_type == "done" or chunk.get("done") is True:
+                    return
+
+                # v4.36 shape: {"text": "word"}.
+                text = chunk.get("text")
+                if text:
+                    yield text
                     continue
 
-                delta = choices[0].get("delta", {})
-                content = delta.get("content")
-                if content:
-                    yield content
+                # Legacy OpenAI delta shape: {"choices":[{"delta":{"content":...}}]}.
+                choices = chunk.get("choices", [])
+                if choices:
+                    content = choices[0].get("delta", {}).get("content")
+                    if content:
+                        yield content
         finally:
             resp.close()
 
@@ -256,10 +285,14 @@ class BridgeClient:
         tool_name: str,
         args: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Invoke a tool on a specific agent."""
+        """Invoke a tool on a specific agent.
+
+        v4.36 bridge reads ``body.agent``/``body.tool`` (not ``agent_id``/``tool_name``);
+        the ``args`` key is unchanged (US0022/G6).
+        """
         body: dict[str, Any] = {
-            "agent_id": agent_id,
-            "tool_name": tool_name,
+            "agent": agent_id,
+            "tool": tool_name,
         }
         if args:
             body["args"] = args
@@ -271,10 +304,17 @@ class BridgeClient:
         *,
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Broadcast a message to all agents (or a tagged subset)."""
-        body: dict[str, Any] = {"message": message}
-        if tags:
-            body["tags"] = tags
+        """Broadcast a message to all agents (or a tagged subset).
+
+        v4.36 ``/v1/broadcast`` requires ``{messages:[{role,content}], tags}`` with a
+        non-empty ``tags`` array (``requireTags`` defaults true, so a tagless broadcast
+        400s). Defaults ``tags`` to ``['operator']`` when none supplied (US0022/G5). The
+        bridge returns ``responses`` as an OBJECT keyed by agentId — parsed in services.py.
+        """
+        body: dict[str, Any] = {
+            "messages": [{"role": "user", "content": message}],
+            "tags": tags if tags else ["operator"],
+        }
         return await self._request("POST", "/v1/broadcast", json=body)
 
     async def register_webhook(

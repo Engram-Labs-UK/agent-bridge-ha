@@ -168,7 +168,13 @@ class TestOptionsFlow:
         flow = AgentBridgeOptionsFlow(entry)
         flow.hass = MagicMock()
 
-        result = await flow.async_step_init()
+        # Stub agent discovery so the options flow never opens a real aiohttp
+        # connector (a MagicMock hass would otherwise leak a lingering timer).
+        with patch.object(
+            AgentBridgeOptionsFlow, "_get_agent_options",
+            AsyncMock(return_value={"cora": "Cora (healthy)"}),
+        ):
+            result = await flow.async_step_init()
         assert result["type"] == "form"
 
     @pytest.mark.asyncio
@@ -178,7 +184,11 @@ class TestOptionsFlow:
         flow = AgentBridgeOptionsFlow(entry)
         flow.hass = MagicMock()
 
-        result = await flow.async_step_init(
-            {"context_max_chars": 20000, "enable_tool_calls": False}
-        )
+        with patch.object(
+            AgentBridgeOptionsFlow, "_get_agent_options",
+            AsyncMock(return_value={"cora": "Cora (healthy)"}),
+        ):
+            result = await flow.async_step_init(
+                {"context_max_chars": 20000, "enable_tool_calls": False}
+            )
         assert result["type"] == "create_entry"

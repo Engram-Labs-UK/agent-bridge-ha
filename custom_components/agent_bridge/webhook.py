@@ -8,9 +8,12 @@ from aiohttp.web import Request, Response
 from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import BRIDGE_WEBHOOK_EVENTS, DOMAIN, EVENT_BRIDGE_UPGRADED
 
 _LOGGER = logging.getLogger(__name__)
+
+# Bridge events that should trigger a coordinator refresh (roster changed).
+_REFRESH_EVENTS = frozenset({"agent:registered", "agent:unregistered", "agent:updated"})
 
 
 async def async_register_webhook(
@@ -58,7 +61,7 @@ async def async_register_with_bridge(
     callback_url = f"{ha_url}/api/webhook/{webhook_id}"
 
     try:
-        result = await client.register_webhook(callback_url, ["agent:health-changed"])
+        result = await client.register_webhook(callback_url, list(BRIDGE_WEBHOOK_EVENTS))
         sub_id = result.get("id") if isinstance(result, dict) else None
         _LOGGER.info("Registered bridge webhook subscription: %s", sub_id)
         return sub_id
@@ -108,12 +111,28 @@ async def _handle_webhook(
 
     _LOGGER.debug("Webhook event: %s", event_type)
 
-    if event_type == "agent:health-changed":
-        for entry_data in hass.data.get(DOMAIN, {}).values():
-            if not isinstance(entry_data, dict):
-                continue
-            coordinator = entry_data.get("coordinator")
-            if coordinator and hasattr(coordinator, "async_push_webhook_data"):
-                await coordinator.async_push_webhook_data(event_data)
+    if event_type == "bridge:upgraded":
+        # The drift signal the CR-0002 audit exists for -- fire an HA event so the
+        # drift-detection consumer (US0029) can react without polling (US0024/AC3).
+        hass.bus.async_fire(EVENT_BRIDGE_UPGRADED, event_data)
+    elif event_type == "agent:health-changed":
+        for coordinator in _iter_coordinators(hass):
+            await coordinator.async_push_webhook_data(event_data)
+    elif event_type in _REFRESH_EVENTS:
+        # Roster changed -- pull a fresh discovery rather than wait for the poll.
+        for coordinator in _iter_coordinators(hass):
+            await coordinator.async_request_refresh()
+    elif event_type == "message:error":
+        _LOGGER.warning("Bridge reported a message error: %s", event_data)
 
     return Response(status=200)
+
+
+def _iter_coordinators(hass: HomeAssistant):
+    """Yield every entry's coordinator that supports webhook pushes."""
+    for entry_data in hass.data.get(DOMAIN, {}).values():
+        if not isinstance(entry_data, dict):
+            continue
+        coordinator = entry_data.get("coordinator")
+        if coordinator is not None:
+            yield coordinator

@@ -128,6 +128,26 @@ async def async_handle_invoke_tool(call: ServiceCall) -> ServiceResponse:
         }
 
 
+def _normalise_broadcast_responses(raw: Any) -> list[dict[str, Any]]:
+    """Normalise the v4.36 broadcast ``responses`` object into a list.
+
+    The bridge returns ``responses`` as an OBJECT keyed by agentId
+    (e.g. ``{"cora": {...}, "eve": {...}}``); iterate by key and fold the key
+    in as ``agent_id`` so HA consumers get a stable list shape. Defensively
+    accepts the legacy list form too (US0022/G5).
+    """
+    if isinstance(raw, dict):
+        normalised: list[dict[str, Any]] = []
+        for agent_id, value in raw.items():
+            entry = dict(value) if isinstance(value, dict) else {"response": value}
+            entry.setdefault("agent_id", agent_id)
+            normalised.append(entry)
+        return normalised
+    if isinstance(raw, list):
+        return [r for r in raw if isinstance(r, dict)]
+    return []
+
+
 async def async_handle_broadcast(call: ServiceCall) -> ServiceResponse:
     """Handle the broadcast service call."""
     hass = call.hass
@@ -140,7 +160,7 @@ async def async_handle_broadcast(call: ServiceCall) -> ServiceResponse:
     try:
         response = await client.broadcast(message, tags=tags)
         return {
-            "responses": response.get("responses", []),
+            "responses": _normalise_broadcast_responses(response.get("responses")),
         }
     except BridgeError as err:
         return {

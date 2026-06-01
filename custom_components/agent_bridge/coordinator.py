@@ -191,8 +191,43 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
             )
 
     async def async_push_webhook_data(self, data: dict[str, Any]) -> None:
-        """Accept pushed data from a webhook event, bypassing the poll cycle."""
-        if not self.data or "status" not in data:
+        """Accept pushed data from a webhook event, bypassing the poll cycle.
+
+        Two distinct shapes (US0024/G11) -- keep bridge-level status and per-agent
+        health separate rather than conflating them:
+
+        * ``{"status": <bridge-status>}`` -- bridge-level status push.
+        * ``{"agentId": <id>, "healthy": <bool>}`` -- per-agent health-changed push;
+          updates that agent's ``healthy`` flag and recomputes the healthy count.
+        """
+        if not self.data:
             return
-        updated = CoordinatorData(**{**self.data, "bridge_status": data["status"]})
-        self.async_set_updated_data(updated)
+
+        # Bridge-level status push.
+        if "status" in data:
+            updated = CoordinatorData(**{**self.data, "bridge_status": data["status"]})
+            self.async_set_updated_data(updated)
+            return
+
+        # Per-agent health-changed push: {"agentId": ..., "healthy": bool}.
+        agent_id = data.get("agentId", data.get("agent_id"))
+        if agent_id is not None and "healthy" in data:
+            healthy_flag = bool(data["healthy"])
+            known_ids = {a["id"] for a in self.data["agents"]}
+            if agent_id not in known_ids:
+                # Unknown agent -- don't no-op; pull a fresh poll instead.
+                await self.async_request_refresh()
+                return
+            agents = [
+                AgentInfo(**{**a, "healthy": healthy_flag}) if a["id"] == agent_id else a
+                for a in self.data["agents"]
+            ]
+            healthy_count = sum(1 for a in agents if a["healthy"])
+            updated = CoordinatorData(
+                **{
+                    **self.data,
+                    "agents": agents,
+                    "agent_count_healthy": healthy_count,
+                }
+            )
+            self.async_set_updated_data(updated)

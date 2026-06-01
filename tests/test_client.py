@@ -155,6 +155,41 @@ class TestInvokeTool:
         result = await client.invoke_tool("cora", "web_search", {"q": "test"})
         assert result["result"] == "ok"
 
+    @pytest.mark.asyncio
+    async def test_invoke_tool_body_field_names(self, client, mock_response):
+        """US0022/G6: body keys are {agent, tool, args}, not agent_id/tool_name."""
+        resp = mock_response(json_data={"ok": True})
+        client._session.request = MagicMock(return_value=resp)
+        await client.invoke_tool("cora", "web_search", {"q": "test"})
+
+        body = client._session.request.call_args.kwargs["json"]
+        assert body == {"agent": "cora", "tool": "web_search", "args": {"q": "test"}}
+        assert "agent_id" not in body and "tool_name" not in body
+
+
+class TestBroadcast:
+
+    @pytest.mark.asyncio
+    async def test_broadcast_body_shape_and_default_tags(self, client, mock_response):
+        """US0022/G5: body is {messages:[{role,content}], tags} with non-empty tags."""
+        resp = mock_response(json_data={"responses": {}})
+        client._session.request = MagicMock(return_value=resp)
+        await client.broadcast("hello all")
+
+        body = client._session.request.call_args.kwargs["json"]
+        assert body["messages"] == [{"role": "user", "content": "hello all"}]
+        assert body["tags"] == ["operator"]  # default, non-empty (requireTags)
+        assert "message" not in body
+
+    @pytest.mark.asyncio
+    async def test_broadcast_explicit_tags(self, client, mock_response):
+        resp = mock_response(json_data={"responses": {}})
+        client._session.request = MagicMock(return_value=resp)
+        await client.broadcast("hi", tags=["ops", "alerts"])
+
+        body = client._session.request.call_args.kwargs["json"]
+        assert body["tags"] == ["ops", "alerts"]
+
 
 class TestErrorHandling:
 

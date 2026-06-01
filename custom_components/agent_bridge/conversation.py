@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -254,8 +255,15 @@ class AgentBridgeConversationAgent(AbstractConversationAgent):
                     if streamed is not None:
                         response_text = streamed
                         used_streaming = True
-                except (BridgeError, Exception):
-                    _LOGGER.debug("Streaming failed, falling back to non-streaming")
+                except asyncio.CancelledError:
+                    # Never swallow cancellation -- propagate it.
+                    raise
+                except BridgeError as err:
+                    _LOGGER.warning("Streaming failed (%s), falling back to non-streaming", err)
+                except Exception:
+                    # A real fault on the voice path this component exists to serve --
+                    # log at error (not a silent debug swallow) before falling back.
+                    _LOGGER.exception("Unexpected streaming error, falling back to non-streaming")
 
             if not used_streaming:
                 # Standard tool call loop (ADR-005: max 10 iterations)
