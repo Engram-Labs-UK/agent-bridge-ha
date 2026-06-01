@@ -2,8 +2,11 @@
 
 > **Project:** Agent Bridge HA
 > **Version:** 0.1.0
-> **Last Updated:** 2026-04-05
+> **Last Updated:** 2026-06-01
 > **Owner:** Darren Benson
+> **Last Review:** 2026-06-01 — reconcile + prd/trd/tsd review vs bridge v4.36 + current HA APIs (CR-0002 redesign basis)
+
+> ⚠️ **Review banner (2026-06-01):** Two strategy gaps surfaced by the CR-0002 audit. **(1)** Several "Done" stories' tests assert **drifted contracts** that no longer match reality — e.g. US0020 AC2/AC3 pin `choices[].delta.content` + the `data:[DONE]` sentinel, but the v4.36 bridge emits `event:message {text}` + `event:done`; mocked-bridge tests pass while the live path is inert. Mocks must be re-pinned to the v4.36 shapes (US0022/US0023). **(2)** There is **no CI matrix against a current HA core** and `ConversationInput` fields are read via `getattr` reflection — the integration drifted v3.1→v4.36 silently. US0029 adds a tested-HA-version pin + CI. The redesign re-platforms onto HA's `ConversationEntity`/`ChatLog`/LLM-API ([CR-0002](change-requests/cr0002.md) / [EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md)); the full TSD module rewrite is tracked by US0030.
 
 ## Overview
 

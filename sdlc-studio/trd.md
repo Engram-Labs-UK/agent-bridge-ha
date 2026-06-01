@@ -3,8 +3,11 @@
 **Project:** Agent Bridge HA
 **Version:** 0.1.0
 **Status:** Draft
-**Last Updated:** 2026-04-05
+**Last Updated:** 2026-06-01
+**Last Review:** 2026-06-01 — reconcile + prd/trd/tsd review vs bridge v4.36 + current HA APIs (CR-0002 redesign basis)
 **PRD Reference:** [PRD](prd.md)
+
+> ⚠️ **Review banner (2026-06-01):** This TRD targets **Agent Bridge v3.1.0+** and HA's legacy conversation API; both have drifted. A verified audit (CR-0002) found: **(a)** the reactive `tool_calls` actuation loop is inert — neither HA nor the **v4.36** bridge carries a `tool_calls` contract; **(b)** the component is on HA's legacy `AbstractConversationAgent`/`async_set_agent`, not `ConversationEntity`/`ChatLog`/LLM-API; **(c)** request/response shapes drifted: `/v1/tools/invoke` (`agent`/`tool`, not `agent_id`/`tool_name`), `/v1/broadcast` (`messages[]`+`tags`, responses-object), SSE (`event:message {text}` + `event:done`, **not** `choices[].delta`/`[DONE]`), webhook health (`{agentId,healthy}`). The redesign + the full TRD rewrite to the v4.36/ConversationEntity model are **[CR-0002](change-requests/cr0002.md)** / **[EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md)** (rewrite tracked by **US0030**). Sections below are the **v0.1 record**; the two clear factual errors are corrected inline this pass.
 
 ---
 
@@ -145,7 +148,7 @@ The integration is a **consumer** of the Agent Bridge REST API, not a provider. 
 |--------|------|---------|------|
 | `GET` | `/health` | Connectivity check and bridge status | No |
 | `GET` | `/health?depth=shallow` | Bridge status + agent counts (polling) | No |
-| `GET` | `/health?depth=deep` | Per-agent health details | No |
+| `GET` | `/v1/health` | Per-agent readiness (tri-state rollup, `toolSurface`, `readOnlySafe`) | Yes |
 | `GET` | `/v1/discovery` | Agent list with capabilities and health | Yes |
 | `POST` | `/v1/chat/completions` | Send message to agent | Yes |
 | `POST` | `/v1/tools/invoke` | Invoke agent tool | Yes |
@@ -786,7 +789,7 @@ Tool failures (entity not found, service timeout, invalid domain) are returned a
 - Compatible with Home Assistant Core 2025.1.0+
 - No additional pip dependencies (only HA-bundled packages)
 - HACS-installable repository structure
-- Works with Agent Bridge v3.1.0+ REST API
+- Works with Agent Bridge v4.36.0+ REST API (was "v3.1.0+" — corrected 2026-06-01; the v3.1-era contract has drifted, see review banner + CR-0002. Pin + CI against a current HA core per US0029.)
 - British English in all user-facing strings
 
 ### Won't Have (This Version)

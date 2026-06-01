@@ -1,18 +1,19 @@
 # Story Registry
 
-**Last Updated:** 2026-04-05
+**Last Updated:** 2026-06-01
 
 ## Summary
 
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
+| Proposed | 10 |
 | Ready | 0 |
 | Planned | 0 |
 | In Progress | 0 |
 | Review | 0 |
 | Done | 20 |
-| **Total** | **20** |
+| **Total** | **30** |
 
 ## Stories by Epic
 
@@ -66,6 +67,21 @@
 |----|-------|--------|--------|-------|
 | [US0020](US0020-sse-streaming.md) | SSE Streaming | Done | 5 | Darren Benson |
 
+### [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
+
+| ID | Title | Status | Points | Owner |
+|----|-------|--------|--------|-------|
+| [US0021](US0021-actuation-strategy-spike.md) | Decision spike — validate Option A (HA LLM API/MCP) against live agents | Proposed | 2 | Darren Benson |
+| [US0022](US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | Proposed | 3 | Darren Benson |
+| [US0023](US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | Proposed | 3 | Darren Benson |
+| [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | Proposed | 3 | Darren Benson |
+| [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | Proposed | 8 | Darren Benson |
+| [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | Proposed | 5 | Darren Benson |
+| [US0027](US0027-restore-actuation-llm-api.md) | Restore actuation via HA Assist LLM API + fail-closed exposure | Proposed | 8 | Darren Benson |
+| [US0028](US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | Proposed | 5 | Darren Benson |
+| [US0029](US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | Proposed | 5 | Darren Benson |
+| [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | Proposed | 2 | Darren Benson |
+
 ## All Stories
 
 | ID | Title | Epic | Status | Points |
@@ -90,9 +106,19 @@
 | [US0018](US0018-webhook-integration.md) | Webhook Integration | [EP0005](../epics/EP0005-realtime-and-broadcast.md) | Done | 3 |
 | [US0019](US0019-broadcast-service.md) | Broadcast Service | [EP0005](../epics/EP0005-realtime-and-broadcast.md) | Done | 2 |
 | [US0020](US0020-sse-streaming.md) | SSE Streaming | [EP0006](../epics/EP0006-advanced-voice.md) | Done | 5 |
+| [US0021](US0021-actuation-strategy-spike.md) | Decision spike — validate Option A (HA LLM API/MCP) against live agents | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 2 |
+| [US0022](US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 3 |
+| [US0023](US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 3 |
+| [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 3 |
+| [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 8 |
+| [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
+| [US0027](US0027-restore-actuation-llm-api.md) | Restore actuation via HA Assist LLM API + fail-closed exposure | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 8 |
+| [US0028](US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
+| [US0029](US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
+| [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 2 |
 
 ## Notes
 
 - Stories are numbered globally (US0001, US0002, etc.)
-- All 20 stories across 6 epics are Done
+- 20 stories across EP0001–EP0006 are Done; 10 new stories (US0021–US0030) for EP0007 are Proposed (CR-0002 redesign, filed 2026-06-01).
 - Stories tracked in [Epic Registry](../epics/_index.md)

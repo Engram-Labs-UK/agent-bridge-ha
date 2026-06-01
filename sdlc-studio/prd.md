@@ -2,8 +2,11 @@
 
 **Project:** Agent Bridge HA
 **Version:** 0.1.0
-**Last Updated:** 2026-04-05
-**Status:** Complete
+**Last Updated:** 2026-06-01
+**Status:** Complete (v0.1 spec — see review banner)
+**Last Review:** 2026-06-01 — reconcile + prd/trd/tsd review against bridge v4.36 + current HA APIs (CR-0002 redesign basis)
+
+> ⚠️ **Review banner (2026-06-01):** This PRD documents the **v0.1** design, which targets "Agent Bridge v3.1.0+". The bridge is now **v4.36.0** and Home Assistant's conversation APIs have moved on by ~12 release cycles. A verified audit found the **reactive home-control path is structurally inert** — it never actuates (neither HA nor the v4.36 bridge carries a `tool_calls` contract), and the component sits on HA's legacy `AbstractConversationAgent`. The redesign is **[CR-0002](change-requests/cr0002.md)** + **[EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md)** (actuation via HA's Assist **LLM API / MCP**; `ConversationEntity` + `ChatLog`; bridge-client re-alignment). The §-level content below is **retained as the v0.1 record** and will be rewritten to the redesigned model by **US0030**. Stale topology references ("agentbox02", "7+ agents", port-only) → now **AB01 primary + AB03 standby**, ~14+ agents; verify live via `GET /v1/discovery`.
 
 ---
 
