@@ -13,7 +13,15 @@
 
 ## User Story Context
 
-G1/G4: the load-bearing fix. Per the CR-0002 decision (Option A), delegate entity context + validated tools to HA's Assist LLM API via `chat_log.async_provide_llm_data()` and `llm.Tool` calls (preferred — converges with the working DBee proactive MCP path and removes cross-repo schema risk). The fallback fork (Option B) sends `tools[]` AND lands a co-requisite `agent-bridge` bridge CR. This story also fixes the fail-open exposure bare-except (`exposure.py:125-127` returns True on import failure, exposing ALL entities).
+G1/G4: the load-bearing fix. This story also fixes the fail-open exposure bare-except (`exposure.py:125-127` returns True on import failure, exposing ALL entities).
+
+> **⚠️ DECIDED DESIGN (2026-06-01, from the US0021 spike + live-fleet consult — supersedes the Option-A/B framing in AC1 below).** "Option A / HA-native" in practice = **agent-direct actuation via a shared HA mount**, NOT the conversation-entity-provides-`llm.Tool` pattern (that needs the bridge to round-trip `tool_calls`, which it does not do). The decided model:
+> 1. This **ConversationEntity** forwards the HA Assist utterance + a compact entity **grounding hint** (hint, not authority) as **free text** to the selected bridge agent, and returns the reply — it does **not** itself actuate.
+> 2. **The agent actuates HA directly** via a **shared HA tool contract** mounted identically per harness (the DBee `/api/mcp` HA MCP Server pattern), with **live read-back** to confirm.
+> 3. Each actuation **emits an event to the bridge audit log** (one audit surface, Rule 3).
+> 4. **Deny/confirm list** for risky domains (locks/alarms/heating/external doors).
+> 5. **`exposure.py` + `tool_executor.py` are RETIRED** (entity context + tools move to the agent's HA mount) — the fail-closed fix (AC2) applies only while they remain during transition.
+> 6. **DBee-first** (already mounted); provisioning Cora/Eve/Julian + the shared-envelope/audit-event path is the new **US0031** (to create). AC1 below is reframed accordingly: this story = the DBee-first reactive proof (free-text forward + grounding hint + reply + actuation-audit surfacing), not a bridge `tool_calls` round-trip.
 
 ## Acceptance Criteria
 
