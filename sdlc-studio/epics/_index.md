@@ -1,6 +1,6 @@
 # Epic Registry
 
-**Last Updated:** 2026-06-01
+**Last Updated:** 2026-06-02
 **PRD Reference:** [Product Requirements Document](../prd.md)
 
 ## Summary

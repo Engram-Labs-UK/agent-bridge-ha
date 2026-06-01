@@ -37,9 +37,9 @@ Re-platform the **reactive** path (HA → bridge agent) onto Home Assistant's mo
 | ID | Title | Status | Depends on | Phase |
 |----|-------|--------|-----------|-------|
 | [US0021](../stories/US0021-actuation-strategy-spike.md) | Decision spike — validate Option A (HA LLM API/MCP) against live agents | Proposed | none | P1 |
-| [US0022](../stories/US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | Proposed | none | P0 |
-| [US0023](../stories/US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | Proposed | none | P0 |
-| [US0024](../stories/US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | Proposed | none | P0 |
+| [US0022](../stories/US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | Done | none | P0 |
+| [US0023](../stories/US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | Done | none | P0 |
+| [US0024](../stories/US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | Done | none | P0 |
 | [US0025](../stories/US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | Proposed | US0021 | P2 |
 | [US0026](../stories/US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | Proposed | US0025 | P2 |
 | [US0027](../stories/US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | Proposed | US0026 | P1 |

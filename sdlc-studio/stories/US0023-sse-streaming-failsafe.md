@@ -1,6 +1,6 @@
 # US0023: Fix SSE streaming delta/terminal parsing + fail-safe error handling
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
@@ -69,3 +69,4 @@ G7: the bridge emits `event:message data:{text}` + `event:done`, while HA's `_it
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-01 | Claude | Initial story for EP0007 (CR-0002 redesign) |
+| 2026-06-02 | Claude | R1 implemented + unit-tested (pytest green); status -> Done |

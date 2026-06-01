@@ -1,6 +1,6 @@
 # US0024: Webhook `agent:health-changed` payload + full event catalogue
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
@@ -69,3 +69,4 @@ G11 + G10: the bridge `agent:health-changed` payload is `{agentId, healthy}` but
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-01 | Claude | Initial story for EP0007 (CR-0002 redesign) |
+| 2026-06-02 | Claude | R1 implemented + unit-tested (pytest green); status -> Done |

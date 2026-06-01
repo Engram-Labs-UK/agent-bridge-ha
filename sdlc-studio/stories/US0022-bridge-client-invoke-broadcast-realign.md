@@ -1,6 +1,6 @@
 # US0022: Re-align bridge client to v4.36 `tools.invoke` + `broadcast`
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
@@ -64,3 +64,4 @@ Two confirmed, independent, self-contained request/response breaks (G6, G5) that
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-01 | Claude | Initial story for EP0007 (CR-0002 redesign) |
+| 2026-06-02 | Claude | R1 implemented + unit-tested (pytest green); status -> Done |

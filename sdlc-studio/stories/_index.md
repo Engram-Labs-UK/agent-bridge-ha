@@ -1,18 +1,18 @@
 # Story Registry
 
-**Last Updated:** 2026-06-01
+**Last Updated:** 2026-06-02
 
 ## Summary
 
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
-| Proposed | 10 |
+| Proposed | 7 |
 | Ready | 0 |
 | Planned | 0 |
 | In Progress | 1 |
 | Review | 0 |
-| Done | 20 |
+| Done | 23 |
 | **Total** | **31** |
 
 ## Stories by Epic
@@ -72,9 +72,9 @@
 | ID | Title | Status | Points | Owner |
 |----|-------|--------|--------|-------|
 | [US0021](US0021-actuation-strategy-spike.md) | Decision spike — validate Option A (HA LLM API/MCP) against live agents | In Progress | 2 | Darren Benson |
-| [US0022](US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | Proposed | 3 | Darren Benson |
-| [US0023](US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | Proposed | 3 | Darren Benson |
-| [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | Proposed | 3 | Darren Benson |
+| [US0022](US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | Done | 3 | Darren Benson |
+| [US0023](US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | Done | 3 | Darren Benson |
+| [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | Done | 3 | Darren Benson |
 | [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | Proposed | 8 | Darren Benson |
 | [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | Proposed | 5 | Darren Benson |
 | [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | Proposed | 8 | Darren Benson |
@@ -108,9 +108,9 @@
 | [US0019](US0019-broadcast-service.md) | Broadcast Service | [EP0005](../epics/EP0005-realtime-and-broadcast.md) | Done | 2 |
 | [US0020](US0020-sse-streaming.md) | SSE Streaming | [EP0006](../epics/EP0006-advanced-voice.md) | Done | 5 |
 | [US0021](US0021-actuation-strategy-spike.md) | Decision spike — validate Option A (HA LLM API/MCP) against live agents | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | In Progress | 2 |
-| [US0022](US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 3 |
-| [US0023](US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 3 |
-| [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 3 |
+| [US0022](US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 3 |
+| [US0023](US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 3 |
+| [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 3 |
 | [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 8 |
 | [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
 | [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 8 |
