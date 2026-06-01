@@ -25,7 +25,7 @@
 | [EP0004](EP0004-multi-agent.md) | Multi-Agent Support | Done | Darren Benson | 3 | 0.1.0 |
 | [EP0005](EP0005-realtime-and-broadcast.md) | Real-Time & Broadcast | Done | Darren Benson | 2 | 0.2.0 |
 | [EP0006](EP0006-advanced-voice.md) | Advanced Voice | Done | Darren Benson | 1 | 0.2.0 |
-| [EP0007](EP0007-bridge-v436-modern-ha-realignment.md) | Bridge v4.36 + Modern HA Re-Alignment | Proposed | Darren Benson | 10 | 0.2.0 |
+| [EP0007](EP0007-bridge-v436-modern-ha-realignment.md) | Bridge v4.36 + Modern HA Re-Alignment | Proposed | Darren Benson | 11 | 0.2.0 |
 
 ## Dependency Graph
 
@@ -59,4 +59,4 @@ EP0001 (Bridge Foundation)
 - Stories are tracked in [Story Registry](../stories/_index.md)
 - EP0001-EP0004 are Phase 1 (v0.1.0) -- core functionality
 - EP0005-EP0006 are Phase 2 (v0.2.0) -- enhancements
-- EP0007 (CR-0002) is the v4.36 + modern-HA re-alignment; restores the reactive home-control path (actuation Option A: HA Assist LLM API/MCP). Supersedes CR-0001.
+- EP0007 (CR-0002) is the v4.36 + modern-HA re-alignment; restores the reactive home-control path (actuation Option A refined: agent-direct via a shared `/api/mcp` HA mount, not an `llm.Tool` round-trip). Supersedes CR-0001.
