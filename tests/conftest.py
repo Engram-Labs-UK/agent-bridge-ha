@@ -46,6 +46,21 @@ MOCK_BRIDGE_URL = "http://10.0.0.206:18780"
 MOCK_TOKEN = "test-bridge-token-123"
 
 
+@pytest.fixture(autouse=True)
+def _bypass_frame_usage_report():
+    """No-op HA's advisory frame.report_usage during unit tests.
+
+    HA 2026's ``DataUpdateCoordinator.__init__`` (and some bus paths) call
+    ``frame.report_usage(...)`` for telemetry, which raises "Frame helper not set
+    up" when a test passes a ``MagicMock`` hass instead of the full ``hass``
+    fixture. The report is advisory (which integration is calling), not behaviour,
+    so stubbing it keeps these fast unit tests valid on a current HA core
+    (the version pin that EP0007/US0029 requires).
+    """
+    with patch("homeassistant.helpers.frame.report_usage"):
+        yield
+
+
 @pytest.fixture
 def mock_config_entry_data() -> dict[str, Any]:
     """Return standard config entry data."""
