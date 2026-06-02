@@ -1,6 +1,6 @@
 # US0027: Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure
 
-> **Status:** Proposed
+> **Status:** Review
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
@@ -79,7 +79,7 @@ G1/G4: the load-bearing fix. This story also fixes the fail-open exposure bare-e
 
 | Story | Type | What's Needed | Status |
 |-------|------|---------------|--------|
-| US0026 | Platform | `_async_handle_message` + `ChatLog` to carry the free-text forward + reply | Proposed |
+| US0026 | Platform | `_async_handle_message` + `ChatLog` to carry the free-text forward + reply | Done |
 | US0021 | Decision | AC2 live-trace (operator HA logs, OQ2) confirming the dominant failure symptom before freezing | In Progress |
 | US0031 | Follow-on | Decides the audit-event mechanism (AC3) + fleet envelope; DBee proof can land first | Proposed |
 
@@ -93,4 +93,5 @@ G1/G4: the load-bearing fix. This story also fixes the fail-open exposure bare-e
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-01 | Claude | Initial story for EP0007 (CR-0002 redesign) |
+| 2026-06-02 | Claude | R3: AC1/AC3/AC4 + deny-confirm implemented & unit-tested (230 green); status -> Review pending operator live E2E (AC2) + US0021 logs |
 | 2026-06-01 | Claude | R0 reconcile: retitled + ACs/Scope/Notes rewritten to the refined Option A (agent-direct, DBee-first); split fleet envelope/audit-mechanism/provisioning out to US0031; dropped `async_provide_llm_data`/`llm.Tool` as primary path |

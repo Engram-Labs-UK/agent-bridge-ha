@@ -7,11 +7,11 @@
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
-| Proposed | 5 |
+| Proposed | 4 |
 | Ready | 0 |
 | Planned | 0 |
 | In Progress | 1 |
-| Review | 0 |
+| Review | 1 |
 | Done | 25 |
 | **Total** | **31** |
 
@@ -77,7 +77,7 @@
 | [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | Done | 3 | Darren Benson |
 | [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | Done | 8 | Darren Benson |
 | [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | Done | 5 | Darren Benson |
-| [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | Proposed | 8 | Darren Benson |
+| [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | Review | 8 | Darren Benson |
 | [US0028](US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | Proposed | 5 | Darren Benson |
 | [US0029](US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | Proposed | 5 | Darren Benson |
 | [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | Proposed | 2 | Darren Benson |
@@ -113,7 +113,7 @@
 | [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 3 |
 | [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 8 |
 | [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 5 |
-| [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 8 |
+| [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Review | 8 |
 | [US0028](US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
 | [US0029](US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
 | [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 2 |
