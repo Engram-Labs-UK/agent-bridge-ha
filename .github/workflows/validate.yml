@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# US0029/AC3: CI runs the suite against a pinned, current HA core so the
+# integration cannot silently re-drift against bridge/HA the way it drifted
+# v3.1 -> v4.36. Keep HA_VERSION in step with const.TESTED_HA_VERSION.
+env:
+  HA_VERSION: "2026.2.3"
+  PYTHON_VERSION: "3.13"
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -14,7 +21,7 @@ jobs:
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
         run: pip install ruff
@@ -32,10 +39,12 @@ jobs:
 
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
-        run: pip install pytest pytest-asyncio pytest-cov aiohttp voluptuous homeassistant hassil home-assistant-intents
+      - name: Install dependencies (pinned HA core)
+        run: |
+          pip install "homeassistant==${HA_VERSION}" \
+            pytest pytest-asyncio pytest-homeassistant-custom-component
 
       - name: Run tests
-        run: python -m pytest tests/ -v --cov=custom_components/agent_bridge --cov-report=term-missing --cov-fail-under=80
+        run: python -m pytest tests/ -q

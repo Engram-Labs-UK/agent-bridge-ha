@@ -49,6 +49,7 @@ from .const import (
     EVENT_ACTUATION_AUDIT,
     EVENT_MESSAGE_RECEIVED,
     SUBENTRY_TYPE_CONVERSATION,
+    VOICE_CAPABLE_ENVELOPES,
 )
 from .exposure import async_get_exposed_entities, build_entity_context
 from .helpers import extract_response_text
@@ -227,6 +228,23 @@ def _agents_from_entry(entry: ConfigEntry) -> list[tuple[str, str, str | None]]:
     return agents
 
 
+def _is_voice_capable(agent_info: dict[str, Any] | None) -> bool:
+    """Gate voice-entity creation on capabilityEnvelope (US0028/AC3, G15).
+
+    Excludes orchestrators and non-conversational envelopes (e.g. Workerbot) so
+    they are not exposed as Assist voice agents. Agents with no discovery record
+    or an unknown envelope are allowed (back-compat with the legacy surface).
+    """
+    if agent_info is None:
+        return True
+    if agent_info.get("is_orchestrator"):
+        return False
+    envelope = (agent_info.get("capability_envelope") or "").lower()
+    if not envelope:
+        return True
+    return envelope in VOICE_CAPABLE_ENVELOPES
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -235,8 +253,18 @@ async def async_setup_entry(
     """Set up the conversation platform: one entity per bridge agent (US0025)."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     client: BridgeClient = data["client"]
+    coordinator = data.get("coordinator")
+    agents_by_id: dict[str, dict[str, Any]] = {}
+    if coordinator is not None and coordinator.data:
+        agents_by_id = {a["id"]: a for a in coordinator.data["agents"]}
 
     for agent_id, agent_name, subentry_id in _agents_from_entry(config_entry):
+        if not _is_voice_capable(agents_by_id.get(agent_id)):
+            _LOGGER.debug(
+                "Skipping %s as a voice entity (capability envelope not conversational)",
+                agent_id,
+            )
+            continue
         entity = AgentBridgeConversationEntity(
             config_entry,
             client,
@@ -304,7 +332,9 @@ class AgentBridgeConversationEntity(ConversationEntity):
             chat_log.async_add_user_content(UserContent(user_input.text))
 
         is_voice = user_input.device_id is not None
-        satellite_id = getattr(user_input, "satellite_id", None)
+        # Typed field reads (US0029/AC2) -- no getattr reflection; satellite_id and
+        # extra_system_prompt are first-class on ConversationInput in modern HA.
+        satellite_id = user_input.satellite_id
         area_name = _resolve_area_name(self.hass, satellite_id or user_input.device_id)
 
         # Entity grounding hint (names/areas/aliases) -- a hint, not state authority.
@@ -316,7 +346,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
             strategy=options.get(CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY),
         )
         risky_domains = _risky_domains_present(exposed_ids)
-        extra_prompt = getattr(user_input, "extra_system_prompt", None)
+        extra_prompt = user_input.extra_system_prompt
         caution = _safety_caution(risky_domains)
         if caution:
             extra_prompt = f"{extra_prompt}\n\n{caution}" if extra_prompt else caution

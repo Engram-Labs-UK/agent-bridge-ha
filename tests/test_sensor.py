@@ -6,12 +6,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.agent_bridge.const import DOMAIN
 from custom_components.agent_bridge.sensor import (
     AgentCountSensor,
     BridgeStatusSensor,
     _device_info,
 )
-from custom_components.agent_bridge.const import DOMAIN
 
 
 @pytest.fixture
@@ -48,6 +48,22 @@ class TestBridgeStatusSensor:
         attrs = sensor.extra_state_attributes
         assert attrs["version"] == "3.2.0"
         assert attrs["uptime_seconds"] == 12345
+
+    def test_tool_surface_attributes(self, mock_entry):
+        """US0028/AC4: /v1/health toolSurface + readOnlySafe surface as attributes."""
+        coord = MagicMock()
+        coord.data = {
+            "bridge_status": "warning",
+            "bridge_version": "4.36.0",
+            "bridge_uptime": 10,
+            "tool_surface": "execute_service",
+            "read_only_safe": False,
+        }
+        sensor = BridgeStatusSensor(coord, mock_entry)
+        assert sensor.native_value == "warning"  # distinct tri-state
+        attrs = sensor.extra_state_attributes
+        assert attrs["tool_surface"] == "execute_service"
+        assert attrs["read_only_safe"] is False
 
     def test_no_data(self, mock_entry):
         coord = MagicMock()

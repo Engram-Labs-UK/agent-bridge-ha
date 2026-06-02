@@ -21,8 +21,10 @@ CONF_ENABLE_TOOL_CALLS = "enable_tool_calls"
 CONF_THINKING_TIMEOUT = "thinking_timeout"
 CONF_SSL_VERIFY = "ssl_verify"
 CONF_DEBUG_LOGGING = "debug_logging"
+CONF_CALLER_ID = "caller_id"  # x-bridge-mcp-caller identity (US0028/G9)
 
 # Defaults
+DEFAULT_CALLER_ID = "homeassistant"
 DEFAULT_BRIDGE_URL = "http://localhost:18780"
 DEFAULT_CONTEXT_MAX_CHARS = 13000
 DEFAULT_CONTEXT_STRATEGY = "truncate"
@@ -33,6 +35,16 @@ DEFAULT_TOOL_TIMEOUT = 10  # seconds per service call
 DEFAULT_STREAMING_TIMEOUT = 300  # seconds
 MAX_ENTITIES = 250
 MAX_TEXT_DEPTH = 8  # recursive response text extraction depth
+
+# Drift baselines (US0029). The integration is built+tested against these; the
+# agent-context drift check raises an HA repair issue when the live bridge moves
+# past the baseline, and CI pins the HA core.
+TESTED_BRIDGE_VERSION = "4.36.0"
+TESTED_HA_VERSION = "2026.2.3"
+
+# v4.36 capability-envelope classes that may become HA voice entities (US0028/AC3).
+# Orchestrators / workerbots are excluded -- they are not conversational front-ends.
+VOICE_CAPABLE_ENVELOPES = frozenset({"chatbot", "agent", "assistant"})
 MAX_TOOL_ITERATIONS = 10  # tool call loop cap (ADR-005)
 
 # Event types (HA bus)

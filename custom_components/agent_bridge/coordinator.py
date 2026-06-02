@@ -20,9 +20,28 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# v4.36 /v1/health tri-state `bridge` field -> sensor state (US0028/AC4). The
+# middle state surfaces a healthy-but-degraded bridge as a distinct `warning`.
+_TRISTATE_MAP = {
+    "ready": "ok",
+    "ok": "ok",
+    "healthy": "ok",
+    "warning": "warning",
+    "degraded": "warning",
+    "error": "error",
+    "unavailable": "error",
+}
+
+
+def _map_tristate(value: Any, fallback: str) -> str:
+    """Map the /v1/health tri-state `bridge` field to a sensor state."""
+    if not isinstance(value, str):
+        return fallback
+    return _TRISTATE_MAP.get(value.lower(), fallback)
+
 
 class AgentInfo(TypedDict):
-    """Typed agent information from bridge discovery."""
+    """Typed agent information from bridge discovery (v4.36 surface, US0028)."""
 
     id: str
     name: str
@@ -31,6 +50,24 @@ class AgentInfo(TypedDict):
     adapter: str
     capabilities: dict[str, Any]
     tags: list[str]
+    # CR-0097 health block
+    health_state: str
+    circuit: str
+    inflight: int
+    last_seen_at: str
+    stale_after: int
+    # CR-0245 metrics
+    latency_ms: float
+    requests: int
+    errors: int
+    # CR-0256/0247/0259 taxonomy
+    agent_class: str
+    capability_envelope: str
+    is_orchestrator: bool
+    framework: str
+    effective_model: str
+    model_provider: str
+    deprecated: bool
 
 
 class CoordinatorData(TypedDict):
@@ -44,6 +81,9 @@ class CoordinatorData(TypedDict):
     agent_count_total: int
     agents: list[AgentInfo]
     last_poll: str
+    # /v1/health tri-state surface (US0028/AC4); optional -- read via .get().
+    tool_surface: str
+    read_only_safe: bool
 
 
 class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
@@ -74,15 +114,40 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self._previous_agents: list[AgentInfo] = []
 
     def _parse_agent(self, raw: dict[str, Any]) -> AgentInfo:
-        """Parse a raw agent dict into typed AgentInfo."""
+        """Parse a raw agent dict into typed AgentInfo (v4.36 surface, US0028/AC2)."""
+        health = raw.get("health") or {}
+        metrics = raw.get("metrics") or {}
+
+        # Prefer the richer health.state when present; fall back to legacy status.
+        health_state = health.get("state", raw.get("status", "unknown"))
+        # A busy/open-circuit/stale agent must read distinctly from healthy: only a
+        # ready agent with a closed circuit is "healthy".
+        circuit = health.get("circuit", "closed")
+        healthy = health_state in ("ready", "healthy") and circuit == "closed"
+
         return AgentInfo(
             id=raw.get("id", ""),
             name=raw.get("name", raw.get("id", "")),
             description=raw.get("description", ""),
-            healthy=raw.get("status") == "healthy",
+            healthy=healthy,
             adapter=raw.get("adapter", ""),
             capabilities=raw.get("capabilities", {}),
             tags=raw.get("tags", []),
+            health_state=health_state,
+            circuit=circuit,
+            inflight=health.get("inflight", 0),
+            last_seen_at=health.get("lastSeenAt", ""),
+            stale_after=health.get("staleAfter", 0),
+            latency_ms=metrics.get("latency", 0),
+            requests=metrics.get("requests", 0),
+            errors=metrics.get("errors", 0),
+            agent_class=raw.get("agentClass", ""),
+            capability_envelope=raw.get("capabilityEnvelope", ""),
+            is_orchestrator=raw.get("isOrchestrator", False),
+            framework=raw.get("framework", ""),
+            effective_model=raw.get("effectiveModel", ""),
+            model_provider=raw.get("modelProvider", ""),
+            deprecated=raw.get("deprecated", False),
         )
 
     def _detect_agent_changes(self, new_agents: list[AgentInfo]) -> None:
@@ -143,15 +208,29 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 self._previous_agents = agents
                 self._last_discovery = now
 
+            # Tri-state /v1/health enrichment (US0028/AC4). Optional + non-fatal: the
+            # tri-state `bridge` field maps a healthy-but-warning state distinctly,
+            # and toolSurface/readOnlySafe diagnose the actuation gap.
+            bridge_status = health.get("status", "unknown")
+            tool_surface = ""
+            read_only_safe = False
+            v1 = await self._poll_v1_health()
+            if v1 is not None:
+                bridge_status = _map_tristate(v1.get("bridge"), bridge_status)
+                tool_surface = v1.get("toolSurface", "")
+                read_only_safe = bool(v1.get("readOnlySafe", False))
+
             data = CoordinatorData(
                 connected=True,
-                bridge_status=health.get("status", "unknown"),
+                bridge_status=bridge_status,
                 bridge_version=health.get("version", "unknown"),
                 bridge_uptime=health.get("uptime_seconds", 0),
                 agent_count_healthy=healthy,
                 agent_count_total=total,
                 agents=agents,
                 last_poll=datetime.now(tz=UTC).isoformat(),
+                tool_surface=tool_surface,
+                read_only_safe=read_only_safe,
             )
 
             self._consecutive_failures = 0
@@ -189,6 +268,21 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 agents=self._previous_agents,
                 last_poll=datetime.now(tz=UTC).isoformat(),
             )
+
+    async def _poll_v1_health(self) -> dict[str, Any] | None:
+        """Poll the auth-gated /v1/health, or None if unavailable (US0028/AC4).
+
+        Non-fatal: a bridge that does not yet serve /v1/health, or a client that
+        does not implement it, leaves the shallow-health values in place.
+        """
+        agent_health = getattr(self.client, "agent_health", None)
+        if agent_health is None:
+            return None
+        try:
+            result = await agent_health()
+        except Exception:
+            return None
+        return result if isinstance(result, dict) else None
 
     async def async_push_webhook_data(self, data: dict[str, Any]) -> None:
         """Accept pushed data from a webhook event, bypassing the poll cycle.

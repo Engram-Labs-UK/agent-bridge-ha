@@ -15,8 +15,10 @@ from .client import BridgeClient
 from .const import (
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
+    CONF_CALLER_ID,
     CONF_SSL_VERIFY,
     CONF_THINKING_TIMEOUT,
+    DEFAULT_CALLER_ID,
     DEFAULT_THINKING_TIMEOUT,
     DOMAIN,
     PLATFORMS,
@@ -66,6 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     ssl_verify = entry.options.get(CONF_SSL_VERIFY, True)
     timeout = entry.options.get(CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT)
+    caller_id = entry.options.get(CONF_CALLER_ID, DEFAULT_CALLER_ID)
 
     client = BridgeClient(
         session,
@@ -73,6 +76,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_BRIDGE_TOKEN],
         timeout=timeout,
         ssl_verify=ssl_verify,
+        caller_id=caller_id,
     )
 
     coordinator = AgentBridgeCoordinator(hass, client)
@@ -109,6 +113,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         subscription_id = await async_register_with_bridge(hass, entry.entry_id, webhook_id)
     hass.data[DOMAIN][entry.entry_id]["webhook_id"] = webhook_id
     hass.data[DOMAIN][entry.entry_id]["webhook_subscription_id"] = subscription_id
+
+    # Drift defences (US0029): check agent-context now, and re-check whenever the
+    # bridge announces an upgrade (the webhook fires EVENT_BRIDGE_UPGRADED, US0024).
+    from .const import EVENT_BRIDGE_UPGRADED
+    from .drift import async_check_agent_context_drift
+
+    await async_check_agent_context_drift(hass, entry)
+
+    async def _on_bridge_upgraded(_event: Any) -> None:
+        await async_check_agent_context_drift(hass, entry)
+
+    entry.async_on_unload(hass.bus.async_listen(EVENT_BRIDGE_UPGRADED, _on_bridge_upgraded))
 
     return True
 

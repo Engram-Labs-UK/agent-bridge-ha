@@ -42,5 +42,11 @@
                 }
             }
         }
+    },
+    "issues": {
+        "bridge_drift": {
+            "title": "Agent Bridge has drifted from its tested baseline",
+            "description": "The bridge reports changes past the integration's tested baseline ({tested_version}): {reasons}. Review the bridge changelog and update the integration if needed. Live bridge version: {live_version}."
+        }
     }
 }

@@ -56,14 +56,21 @@ class BridgeStatusSensor(CoordinatorEntity[AgentBridgeCoordinator], SensorEntity
         return None
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | int]:
-        """Return version and uptime as attributes."""
+    def extra_state_attributes(self) -> dict[str, str | int | bool]:
+        """Return version, uptime and the v4.36 tool-surface view as attributes."""
         if not self.coordinator.data:
             return {}
-        return {
-            "version": self.coordinator.data["bridge_version"],
-            "uptime_seconds": self.coordinator.data["bridge_uptime"],
+        data = self.coordinator.data
+        attrs: dict[str, str | int | bool] = {
+            "version": data["bridge_version"],
+            "uptime_seconds": data["bridge_uptime"],
         }
+        # US0028/AC4: surface the actuation diagnostics when /v1/health provides them.
+        if data.get("tool_surface"):
+            attrs["tool_surface"] = data["tool_surface"]
+        if "read_only_safe" in data:
+            attrs["read_only_safe"] = data["read_only_safe"]
+        return attrs
 
 
 class AgentCountSensor(CoordinatorEntity[AgentBridgeCoordinator], SensorEntity):

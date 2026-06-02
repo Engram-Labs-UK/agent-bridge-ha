@@ -53,10 +53,15 @@ class BridgeClient:
         *,
         timeout: int = DEFAULT_THINKING_TIMEOUT,
         ssl_verify: bool = True,
+        caller_id: str | None = None,
     ) -> None:
         self._session = session
         self._base_url = base_url.rstrip("/")
         self._headers = {"Authorization": f"Bearer {token}"}
+        # v4.36 crew-aware caller identity (US0028/G9). Sent on every request so the
+        # bridge can scope discovery/selection to this caller's crew.
+        if caller_id:
+            self._headers["x-bridge-mcp-caller"] = caller_id
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._ssl: bool | None = None if ssl_verify else False
 
@@ -142,6 +147,23 @@ class BridgeClient:
         data = await self._request("GET", "/v1/discovery")
         agents = data.get("agents", [])
         return agents if isinstance(agents, list) else []
+
+    async def agent_health(self) -> dict[str, Any]:
+        """Get the auth-gated ``/v1/health`` view (tri-state + toolSurface).
+
+        v4.36 per-agent readiness lives here, not at ``/health?depth=deep``
+        (a phantom -- the handler ignores the query string). Returns the tri-state
+        ``bridge`` field plus ``toolSurface``/``readOnlySafe`` (US0028/AC4, G14).
+        """
+        return await self._request("GET", "/v1/health")
+
+    async def agent_context(self) -> dict[str, Any]:
+        """Get ``/v1/agent-context`` -- the bridge's machine-readable changelog.
+
+        Carries ``version``/``notable_capabilities``/``knownIssues``/``deprecations``
+        used by the drift check to raise an HA repair issue (US0029/G13).
+        """
+        return await self._request("GET", "/v1/agent-context")
 
     async def chat(
         self,
