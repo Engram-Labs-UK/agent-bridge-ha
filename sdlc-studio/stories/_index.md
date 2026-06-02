@@ -7,12 +7,12 @@
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
-| Proposed | 7 |
+| Proposed | 5 |
 | Ready | 0 |
 | Planned | 0 |
 | In Progress | 1 |
 | Review | 0 |
-| Done | 23 |
+| Done | 25 |
 | **Total** | **31** |
 
 ## Stories by Epic
@@ -75,8 +75,8 @@
 | [US0022](US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | Done | 3 | Darren Benson |
 | [US0023](US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | Done | 3 | Darren Benson |
 | [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | Done | 3 | Darren Benson |
-| [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | Proposed | 8 | Darren Benson |
-| [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | Proposed | 5 | Darren Benson |
+| [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | Done | 8 | Darren Benson |
+| [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | Done | 5 | Darren Benson |
 | [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | Proposed | 8 | Darren Benson |
 | [US0028](US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | Proposed | 5 | Darren Benson |
 | [US0029](US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | Proposed | 5 | Darren Benson |
@@ -111,8 +111,8 @@
 | [US0022](US0022-bridge-client-invoke-broadcast-realign.md) | Re-align bridge client to v4.36 `tools.invoke` + `broadcast` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 3 |
 | [US0023](US0023-sse-streaming-failsafe.md) | Fix SSE streaming delta/terminal parsing + fail-safe error handling | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 3 |
 | [US0024](US0024-webhook-payload-and-catalogue.md) | Webhook `agent:health-changed` payload + full event catalogue | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 3 |
-| [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 8 |
-| [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
+| [US0025](US0025-conversationentity-subentries.md) | Migrate to `ConversationEntity` + config subentries | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 8 |
+| [US0026](US0026-handle-message-chatlog.md) | Implement `_async_handle_message` + adopt `ChatLog` | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 5 |
 | [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 8 |
 | [US0028](US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
 | [US0029](US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |

@@ -1,6 +1,6 @@
 # US0026: Implement `_async_handle_message` + adopt `ChatLog`
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
@@ -63,3 +63,4 @@ G3: HA promoted `_async_handle_message(user_input, chat_log)` specifically to ha
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-01 | Claude | Initial story for EP0007 (CR-0002 redesign) |
+| 2026-06-02 | Claude | R2 implemented + unit-tested on HA 2026.2.3 (pytest green); status -> Done |
