@@ -62,12 +62,14 @@ class AgentInfo(TypedDict):
     errors: int
     # CR-0256/0247/0259 taxonomy
     agent_class: str
-    capability_envelope: str
+    identity_substrate: str
+    capability_envelope: dict[str, Any]
     is_orchestrator: bool
     framework: str
     effective_model: str
     model_provider: str
     deprecated: bool
+    crew: str
 
 
 class CoordinatorData(TypedDict):
@@ -142,12 +144,14 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
             requests=metrics.get("requests", 0),
             errors=metrics.get("errors", 0),
             agent_class=raw.get("agentClass", ""),
-            capability_envelope=raw.get("capabilityEnvelope", ""),
+            identity_substrate=raw.get("identitySubstrate", ""),
+            capability_envelope=raw.get("capabilityEnvelope") or {},
             is_orchestrator=raw.get("isOrchestrator", False),
             framework=raw.get("framework", ""),
             effective_model=raw.get("effectiveModel", ""),
             model_provider=raw.get("modelProvider", ""),
             deprecated=raw.get("deprecated", False),
+            crew=raw.get("crew", ""),
         )
 
     def _detect_agent_changes(self, new_agents: list[AgentInfo]) -> None:

@@ -48,5 +48,42 @@
             "title": "Agent Bridge has drifted from its tested baseline",
             "description": "The bridge reports changes past the integration's tested baseline ({tested_version}): {reasons}. Review the bridge changelog and update the integration if needed. Live bridge version: {live_version}."
         }
+    },
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "Add agent",
+                "reconfigure": "Edit instructions"
+            },
+            "step": {
+                "user": {
+                    "title": "Select a crew",
+                    "description": "Pick a crew to narrow the agent list, or choose All crews.",
+                    "data": {
+                        "crew": "Crew"
+                    }
+                },
+                "agent": {
+                    "title": "Select an agent",
+                    "description": "Only conversational agents are listed (no models, chatbots, workerbots or orchestrators).",
+                    "data": {
+                        "agent_id": "Agent",
+                        "prompt": "Instructions"
+                    },
+                    "data_description": {
+                        "prompt": "Instructions sent to the agent each turn -- tells it the request is from Home Assistant and to actuate via its Home Assistant tools."
+                    }
+                },
+                "reconfigure": {
+                    "title": "Edit instructions",
+                    "data": {
+                        "prompt": "Instructions"
+                    }
+                }
+            },
+            "abort": {
+                "no_agents": "No selectable agents were found on the bridge."
+            }
+        }
     }
 }

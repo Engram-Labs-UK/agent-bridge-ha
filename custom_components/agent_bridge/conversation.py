@@ -40,16 +40,17 @@ from .const import (
     CONF_CONTEXT_STRATEGY,
     CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
+    CONF_PROMPT,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_CONTINUATION_EXCLUSIONS,
     DEFAULT_CONTINUATION_PHRASES,
+    DEFAULT_PROMPT,
     DENY_CONFIRM_DOMAINS,
     DOMAIN,
     EVENT_ACTUATION_AUDIT,
     EVENT_MESSAGE_RECEIVED,
     SUBENTRY_TYPE_CONVERSATION,
-    VOICE_CAPABLE_ENVELOPES,
 )
 from .exposure import async_get_exposed_entities, build_entity_context
 from .helpers import extract_response_text
@@ -93,13 +94,19 @@ def _build_system_prompt(
     area_name: str | None,
     entity_context: str,
     extra_system_prompt: str | None,
+    instructions: str | None = None,
 ) -> str:
-    """Build the three-layer system prompt: room + entities + extra.
+    """Build the layered system prompt: instructions + room + entities + extra.
 
-    The entity context is a **grounding hint** (names/areas/aliases), not state
+    ``instructions`` is the operator-editable origin/role layer (CR-0003) telling
+    the agent the turn is from Home Assistant and to actuate via its HA tools. The
+    entity context is a **grounding hint** (names/areas/aliases), not state
     authority -- the agent reads live HA state itself before acting (US0027).
     """
     parts: list[str] = []
+
+    if instructions:
+        parts.append(instructions)
 
     if area_name:
         parts.append(f"The user is in the {area_name}.")
@@ -203,14 +210,17 @@ def _messages_from_chat_log(chat_log: ChatLog) -> list[dict[str, Any]]:
     return messages
 
 
-def _agents_from_entry(entry: ConfigEntry) -> list[tuple[str, str, str | None]]:
-    """Resolve (agent_id, agent_name, subentry_id) tuples to host entities for.
+def _agents_from_entry(
+    entry: ConfigEntry,
+) -> list[tuple[str, str, str | None, str]]:
+    """Resolve (agent_id, agent_name, subentry_id, prompt) tuples to host entities.
 
-    Prefers config subentries of type ``conversation`` (US0025). Falls back to the
-    single configured default agent for installs that predate subentries -- migration
-    is offered, not forced.
+    Prefers config subentries of type ``conversation`` (US0025), carrying each
+    agent's editable instructions (CR-0003). Falls back to the single configured
+    default agent (with the default prompt) for installs that predate subentries --
+    migration is offered, not forced.
     """
-    agents: list[tuple[str, str, str | None]] = []
+    agents: list[tuple[str, str, str | None, str]] = []
     for subentry_id, subentry in entry.subentries.items():
         if getattr(subentry, "subentry_type", None) != SUBENTRY_TYPE_CONVERSATION:
             continue
@@ -218,31 +228,34 @@ def _agents_from_entry(entry: ConfigEntry) -> list[tuple[str, str, str | None]]:
         if not agent_id:
             continue
         agent_name = getattr(subentry, "title", None) or agent_id
-        agents.append((agent_id, agent_name, subentry_id))
+        prompt = subentry.data.get(CONF_PROMPT, DEFAULT_PROMPT)
+        agents.append((agent_id, agent_name, subentry_id, prompt))
 
     if not agents:
         default_agent = entry.data.get(CONF_DEFAULT_AGENT)
         if default_agent:
-            agents.append((default_agent, default_agent, None))
+            agents.append((default_agent, default_agent, None, DEFAULT_PROMPT))
 
     return agents
 
 
 def _is_voice_capable(agent_info: dict[str, Any] | None) -> bool:
-    """Gate voice-entity creation on capabilityEnvelope (US0028/AC3, G15).
+    """Gate voice-entity creation on the v4.36 taxonomy (US0028/AC3 + CR-0003).
 
-    Excludes orchestrators and non-conversational envelopes (e.g. Workerbot) so
-    they are not exposed as Assist voice agents. Agents with no discovery record
-    or an unknown envelope are allowed (back-compat with the legacy surface).
+    Only full **agents** (``agentClass: 'agent'`` with a real identity) become
+    voice entities -- not orchestrators, chatbots (no tools), workerbots (no chat),
+    or bare model passthroughs (``identitySubstrate: 'none'``). Agents with no
+    discovery record / no taxonomy are allowed (back-compat with a legacy bridge).
     """
     if agent_info is None:
         return True
     if agent_info.get("is_orchestrator"):
         return False
-    envelope = (agent_info.get("capability_envelope") or "").lower()
-    if not envelope:
-        return True
-    return envelope in VOICE_CAPABLE_ENVELOPES
+    agent_class = str(agent_info.get("agent_class") or "").lower()
+    if agent_class and agent_class != "agent":
+        return False
+    substrate = str(agent_info.get("identity_substrate") or "").lower()
+    return substrate != "none"
 
 
 async def async_setup_entry(
@@ -258,10 +271,10 @@ async def async_setup_entry(
     if coordinator is not None and coordinator.data:
         agents_by_id = {a["id"]: a for a in coordinator.data["agents"]}
 
-    for agent_id, agent_name, subentry_id in _agents_from_entry(config_entry):
+    for agent_id, agent_name, subentry_id, prompt in _agents_from_entry(config_entry):
         if not _is_voice_capable(agents_by_id.get(agent_id)):
             _LOGGER.debug(
-                "Skipping %s as a voice entity (capability envelope not conversational)",
+                "Skipping %s as a voice entity (not a full agent identity)",
                 agent_id,
             )
             continue
@@ -271,6 +284,7 @@ async def async_setup_entry(
             agent_id=agent_id,
             agent_name=agent_name,
             subentry_id=subentry_id,
+            prompt=prompt,
         )
         if subentry_id is not None:
             async_add_entities([entity], config_subentry_id=subentry_id)
@@ -292,11 +306,13 @@ class AgentBridgeConversationEntity(ConversationEntity):
         agent_id: str,
         agent_name: str,
         subentry_id: str | None = None,
+        prompt: str = DEFAULT_PROMPT,
     ) -> None:
         """Initialise the entity for a single bridge agent."""
         self.entry = entry
         self.client = client
         self._agent_id = agent_id
+        self._prompt = prompt
         self._attr_name = agent_name
         unique_suffix = subentry_id or agent_id
         self._attr_unique_id = f"{entry.entry_id}_{unique_suffix}"
@@ -351,6 +367,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
         if caution:
             extra_prompt = f"{extra_prompt}\n\n{caution}" if extra_prompt else caution
         system_prompt = _build_system_prompt(
+            instructions=self._prompt,
             area_name=area_name,
             entity_context=entity_context,
             extra_system_prompt=extra_prompt,

@@ -8,6 +8,19 @@ PLATFORMS: list[str] = ["conversation", "sensor", "binary_sensor", "event"]
 # Config subentry type: one conversation entity per bridge agent (US0025).
 SUBENTRY_TYPE_CONVERSATION = "conversation"
 CONF_AGENT_ID = "agent_id"
+CONF_CREW = "crew"  # crew the agent belongs to (CR-0003 crew-scoped picker)
+CONF_PROMPT = "prompt"  # editable per-agent instructions folded into the system prompt
+
+# Default instructions folded into the system prompt so the agent knows the turn
+# originates from Home Assistant and should actuate via its HA tools (CR-0003).
+# Operator-editable per agent in the subentry config.
+DEFAULT_PROMPT = (
+    "This request comes from Home Assistant Assist. You are the user's home "
+    "agent: read and actuate Home Assistant devices via your Home Assistant "
+    "tools, confirm safety-relevant actions (locks, alarms, heating, external "
+    "doors) before acting, and read the device's live state back to verify the "
+    "result. Keep replies concise and suitable for voice."
+)
 
 # Config entry keys
 CONF_BRIDGE_URL = "bridge_url"

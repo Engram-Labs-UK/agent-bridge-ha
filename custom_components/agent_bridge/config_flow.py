@@ -16,6 +16,10 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+)
 
 from .client import BridgeAuthError, BridgeClient, BridgeConnectionError, BridgeError
 from .const import (
@@ -24,19 +28,47 @@ from .const import (
     CONF_BRIDGE_URL,
     CONF_CONTEXT_MAX_CHARS,
     CONF_CONTEXT_STRATEGY,
+    CONF_CREW,
     CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
     CONF_ENABLE_TOOL_CALLS,
+    CONF_PROMPT,
     CONF_SSL_VERIFY,
     CONF_THINKING_TIMEOUT,
     CONF_VOICE_AGENT,
     DEFAULT_BRIDGE_URL,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
+    DEFAULT_PROMPT,
     DEFAULT_THINKING_TIMEOUT,
     DOMAIN,
     SUBENTRY_TYPE_CONVERSATION,
 )
+from .helpers import agent_crew, is_selectable_agent
+
+ALL_CREWS = "__all__"
+
+
+def _agent_label(raw: dict[str, Any]) -> str:
+    """Human label for an agent in a picker."""
+    name = raw.get("name", raw["id"])
+    crew = agent_crew(raw)
+    status = raw.get("status", raw.get("health", {}).get("state", "unknown"))
+    return f"{name} ({crew})" if crew else f"{name} ({status})"
+
+
+async def _discover_agents(hass, entry: ConfigEntry) -> list[dict[str, Any]]:
+    """Discover raw agents from the bridge (shared by the pickers)."""
+    session = async_get_clientsession(hass)
+    client = BridgeClient(
+        session,
+        entry.data[CONF_BRIDGE_URL],
+        entry.data[CONF_BRIDGE_TOKEN],
+        timeout=10,
+        ssl_verify=entry.options.get(CONF_SSL_VERIFY, True),
+    )
+    return await client.discover()
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -120,9 +152,11 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
             )
 
+        # Only list real, selectable agents -- not models/chatbots/workerbots (CR-0003).
         agent_options = {
-            agent["id"]: f"{agent.get('name', agent['id'])} ({agent.get('status', 'unknown')})"
+            agent["id"]: _agent_label(agent)
             for agent in self._agents
+            if is_selectable_agent(agent)
         }
 
         return self.async_show_form(
@@ -151,55 +185,112 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
         return {SUBENTRY_TYPE_CONVERSATION: ConversationSubentryFlowHandler}
 
 
+def _prompt_schema(default: str) -> vol.Schema:
+    """Schema for the editable per-agent instructions field (CR-0003)."""
+    return vol.Schema(
+        {
+            vol.Optional(CONF_PROMPT, default=default): TextSelector(
+                TextSelectorConfig(multiline=True)
+            ),
+        }
+    )
+
+
 class ConversationSubentryFlowHandler(ConfigSubentryFlow):
-    """Subentry flow to add one bridge agent as a ConversationEntity (US0025)."""
+    """Add a bridge agent as a ConversationEntity: crew -> agent -> instructions.
+
+    CR-0003: a cascading crew picker then a crew-scoped agent picker (real agents
+    only -- no models/chatbots/workerbots), plus an editable Instructions field
+    (default :data:`DEFAULT_PROMPT`) that the entity folds into the system prompt.
+    Editable later via the reconfigure step.
+    """
+
+    def __init__(self) -> None:
+        self._agents: list[dict[str, Any]] = []
+        self._crew: str | None = None
+
+    async def _load_agents(self) -> list[dict[str, Any]]:
+        """Discover + cache the selectable agents for this flow."""
+        if self._agents:
+            return self._agents
+        try:
+            raw = await _discover_agents(self.hass, self._get_entry())
+        except Exception:
+            _LOGGER.warning("Could not discover agents for conversation subentry")
+            raw = []
+        self._agents = [a for a in raw if is_selectable_agent(a)]
+        return self._agents
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Pick a bridge agent to expose as an Assist conversation entity."""
-        errors: dict[str, str] = {}
-        entry = self._get_entry()
+        """Step 1: pick a crew (or All crews)."""
+        agents = await self._load_agents()
+        if not agents:
+            return self.async_abort(reason="no_agents")
+
+        crews = sorted({c for a in agents if (c := agent_crew(a))})
+        # No crews declared -> skip straight to the agent picker.
+        if not crews:
+            self._crew = None
+            return await self.async_step_agent()
 
         if user_input is not None:
-            agent_id = user_input[CONF_AGENT_ID]
-            return self.async_create_entry(
-                title=user_input.get("name") or agent_id,
-                data={CONF_AGENT_ID: agent_id},
-            )
+            self._crew = None if user_input[CONF_CREW] == ALL_CREWS else user_input[CONF_CREW]
+            return await self.async_step_agent()
 
-        agent_options = await self._discover_agent_options(entry)
-        if not agent_options:
-            errors["base"] = "no_agents"
-
+        crew_options = {ALL_CREWS: "All crews", **{c: c for c in crews}}
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_AGENT_ID): vol.In(agent_options) if agent_options else str,
-                }
+                {vol.Required(CONF_CREW, default=ALL_CREWS): vol.In(crew_options)}
             ),
-            errors=errors,
         )
 
-    async def _discover_agent_options(self, entry: ConfigEntry) -> dict[str, str]:
-        """Discover bridge agents for the subentry picker."""
-        try:
-            session = async_get_clientsession(self.hass)
-            client = BridgeClient(
-                session,
-                entry.data[CONF_BRIDGE_URL],
-                entry.data[CONF_BRIDGE_TOKEN],
-                timeout=10,
-                ssl_verify=entry.options.get(CONF_SSL_VERIFY, True),
+    async def async_step_agent(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Step 2: pick an agent in the chosen crew + set instructions."""
+        agents = [a for a in self._agents if self._crew is None or agent_crew(a) == self._crew]
+        if not agents:
+            return self.async_abort(reason="no_agents")
+
+        if user_input is not None:
+            agent_id = user_input[CONF_AGENT_ID]
+            chosen = next((a for a in agents if a["id"] == agent_id), {})
+            return self.async_create_entry(
+                title=chosen.get("name", agent_id),
+                data={
+                    CONF_AGENT_ID: agent_id,
+                    CONF_CREW: agent_crew(chosen),
+                    CONF_PROMPT: user_input.get(CONF_PROMPT, DEFAULT_PROMPT),
+                },
             )
-            agents = await client.discover()
-            return {
-                a["id"]: f"{a.get('name', a['id'])} ({a.get('status', 'unknown')})" for a in agents
-            }
-        except Exception:
-            _LOGGER.warning("Could not discover agents for conversation subentry")
-            return {}
+
+        agent_options = {a["id"]: _agent_label(a) for a in agents}
+        schema = vol.Schema({vol.Required(CONF_AGENT_ID): vol.In(agent_options)}).extend(
+            _prompt_schema(DEFAULT_PROMPT).schema
+        )
+        return self.async_show_form(step_id="agent", data_schema=schema)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit an existing agent entity's instructions (CR-0003)."""
+        subentry = self._get_reconfigure_subentry()
+        current = subentry.data.get(CONF_PROMPT, DEFAULT_PROMPT)
+
+        if user_input is not None:
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                data={**subentry.data, CONF_PROMPT: user_input[CONF_PROMPT]},
+            )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_prompt_schema(current),
+        )
 
 
 class AgentBridgeOptionsFlow(OptionsFlow):
@@ -277,9 +368,8 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                 ssl_verify=self._config_entry.options.get(CONF_SSL_VERIFY, True),
             )
             agents = await client.discover()
-            return {
-                a["id"]: f"{a.get('name', a['id'])} ({a.get('status', 'unknown')})" for a in agents
-            }
+            # Real, selectable agents only -- not models/chatbots/workerbots (CR-0003).
+            return {a["id"]: _agent_label(a) for a in agents if is_selectable_agent(a)}
         except Exception:
             _LOGGER.warning("Could not discover agents for options flow")
             # Fall back to just the current agent

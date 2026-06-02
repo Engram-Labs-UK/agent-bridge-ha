@@ -7,6 +7,34 @@ from typing import Any
 from .const import MAX_TEXT_DEPTH, TEXT_PRIORITY_KEYS
 
 
+def is_selectable_agent(raw: dict[str, Any]) -> bool:
+    """Whether a discovered agent should appear in the voice-agent picker (CR-0003).
+
+    Only full **agents** (an identity + tools + conversational) make sense as HA
+    voice agents. Excludes, using the v4.36 taxonomy:
+    - orchestrators (``isOrchestrator``),
+    - chatbots (conversational but no tools -- can't actuate) and workerbots
+      (tools but not conversational) -- i.e. any ``agentClass`` other than ``agent``,
+    - bare model passthroughs (``identitySubstrate: 'none'`` -- e.g. ``openrouter-*``).
+
+    Entries with no taxonomy at all (legacy/older bridge) are allowed, so the picker
+    still works against a bridge that predates these fields.
+    """
+    if raw.get("isOrchestrator"):
+        return False
+    agent_class = str(raw.get("agentClass") or "").lower()
+    if agent_class and agent_class != "agent":
+        return False
+    substrate = str(raw.get("identitySubstrate") or "").lower()
+    return substrate != "none"
+
+
+def agent_crew(raw: dict[str, Any]) -> str | None:
+    """Return the crew an agent belongs to, or None (CR-0003)."""
+    crew = raw.get("crew")
+    return str(crew) if crew else None
+
+
 def extract_response_text(data: Any, *, _depth: int = 0) -> str | None:
     """Extract text from a bridge response using priority key traversal.
 

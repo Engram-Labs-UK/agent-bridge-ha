@@ -97,13 +97,23 @@ class TestParseAgentHealthBlock:
 
 class TestVoiceCapableGating:
     def test_workerbot_excluded(self):
-        assert _is_voice_capable({"capability_envelope": "workerbot"}) is False
+        assert _is_voice_capable({"agent_class": "workerbot"}) is False
+
+    def test_chatbot_excluded(self):
+        # CR-0003: chatbots (no tools) can't actuate -- not selectable.
+        assert _is_voice_capable({"agent_class": "chatbot"}) is False
 
     def test_orchestrator_excluded(self):
         assert _is_voice_capable({"is_orchestrator": True}) is False
 
-    def test_chatbot_allowed(self):
-        assert _is_voice_capable({"capability_envelope": "chatbot"}) is True
+    def test_bare_model_excluded(self):
+        assert _is_voice_capable({"identity_substrate": "none"}) is False
+
+    def test_full_agent_allowed(self):
+        assert (
+            _is_voice_capable({"agent_class": "agent", "identity_substrate": "persona"})
+            is True
+        )
 
     def test_unknown_allowed_for_backcompat(self):
         assert _is_voice_capable(None) is True
