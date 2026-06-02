@@ -30,9 +30,20 @@ def is_selectable_agent(raw: dict[str, Any]) -> bool:
 
 
 def agent_crew(raw: dict[str, Any]) -> str | None:
-    """Return the crew an agent belongs to, or None (CR-0003)."""
+    """Return the crew an agent belongs to, or None (CR-0003).
+
+    Per-agent crew membership is the agent's ``team``, exposed only under the
+    ``/v1/discovery?include=crew`` projection as a nested ``crew: {team, ...}``
+    block. Handles that shape, a nested ``id``, and a flat string defensively.
+    """
     crew = raw.get("crew")
-    return str(crew) if crew else None
+    if isinstance(crew, dict):
+        team = crew.get("team") or crew.get("id")
+        return str(team) if team else None
+    if crew:
+        return str(crew)
+    team = raw.get("team")
+    return str(team) if team else None
 
 
 def extract_response_text(data: Any, *, _depth: int = 0) -> str | None:

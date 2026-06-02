@@ -26,6 +26,7 @@ from .const import (
     CONF_AGENT_ID,
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
+    CONF_CALLER_ID,
     CONF_CONTEXT_MAX_CHARS,
     CONF_CONTEXT_STRATEGY,
     CONF_CREW,
@@ -37,6 +38,7 @@ from .const import (
     CONF_THINKING_TIMEOUT,
     CONF_VOICE_AGENT,
     DEFAULT_BRIDGE_URL,
+    DEFAULT_CALLER_ID,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_PROMPT,
@@ -58,7 +60,11 @@ def _agent_label(raw: dict[str, Any]) -> str:
 
 
 async def _discover_agents(hass, entry: ConfigEntry) -> list[dict[str, Any]]:
-    """Discover raw agents from the bridge (shared by the pickers)."""
+    """Discover raw agents from the bridge (shared by the pickers).
+
+    Requests ``include=crew`` so each agent carries its crew membership
+    (``crew.team``) for the crew-scoped picker (CR-0003).
+    """
     session = async_get_clientsession(hass)
     client = BridgeClient(
         session,
@@ -66,8 +72,9 @@ async def _discover_agents(hass, entry: ConfigEntry) -> list[dict[str, Any]]:
         entry.data[CONF_BRIDGE_TOKEN],
         timeout=10,
         ssl_verify=entry.options.get(CONF_SSL_VERIFY, True),
+        caller_id=entry.options.get(CONF_CALLER_ID, DEFAULT_CALLER_ID),
     )
-    return await client.discover()
+    return await client.discover(include=["crew"])
 
 
 _LOGGER = logging.getLogger(__name__)

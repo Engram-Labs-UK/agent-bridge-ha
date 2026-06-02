@@ -142,9 +142,17 @@ class BridgeClient:
         """
         return await self._request("GET", f"/health?depth={depth}", auth=False)
 
-    async def discover(self) -> list[dict[str, Any]]:
-        """Get the list of registered agents from the bridge."""
-        data = await self._request("GET", "/v1/discovery")
+    async def discover(self, *, include: list[str] | None = None) -> list[dict[str, Any]]:
+        """Get the list of registered agents from the bridge.
+
+        ``include`` requests v4.36 ``?include=`` projection groups (e.g.
+        ``["crew"]`` adds each agent's ``crew: {team, visibleCrews}`` block, the
+        only place per-agent crew membership is exposed -- CR-0003).
+        """
+        path = "/v1/discovery"
+        if include:
+            path = f"{path}?include={','.join(include)}"
+        data = await self._request("GET", path)
         agents = data.get("agents", [])
         return agents if isinstance(agents, list) else []
 

@@ -46,6 +46,13 @@ class TestIsSelectableAgent:
         assert agent_crew(CORA) == "home"
         assert agent_crew(MODEL) is None
 
+    def test_agent_crew_include_projection_shape(self):
+        # /v1/discovery?include=crew nests crew as {team, visibleCrews} (CR-0003 fix).
+        assert agent_crew({"id": "x", "crew": {"team": "home", "visibleCrews": ["home"]}}) == "home"
+        assert agent_crew({"id": "x", "crew": {"id": "ops"}}) == "ops"
+        assert agent_crew({"id": "x", "team": "home"}) == "home"
+        assert agent_crew({"id": "x", "crew": {}}) is None
+
 
 def _handler(hass, agents):
     h = ConversationSubentryFlowHandler()
