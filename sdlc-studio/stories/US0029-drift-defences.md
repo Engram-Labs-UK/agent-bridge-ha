@@ -1,6 +1,6 @@
 # US0029: Drift defences — agent-context awareness, version pin, CI vs current HA
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
@@ -70,3 +70,4 @@ G13/G16: the component drifted v3.1→v4.36 silently because it reads none of th
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-01 | Claude | Initial story for EP0007 (CR-0002 redesign) |
+| 2026-06-02 | Claude | R4 implemented + unit-tested (248 green); status -> Done |

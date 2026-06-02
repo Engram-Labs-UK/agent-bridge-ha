@@ -1,6 +1,6 @@
 # US0028: Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`)
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
@@ -77,3 +77,4 @@ G8/G9/G14/G15/G17/G18: the component consumes a v3.1-era subset. Sending `x-brid
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-01 | Claude | Initial story for EP0007 (CR-0002 redesign) |
+| 2026-06-02 | Claude | R4 implemented + unit-tested (248 green); status -> Done |
