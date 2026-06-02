@@ -1,6 +1,6 @@
 [project]
 name = "agent-bridge-ha"
-version = "0.2.0"
+version = "0.3.0"
 # Modern HA conversation APIs (ConversationEntity._async_handle_message, ChatLog,
 # config subentries) require Python 3.13 / HA >= 2025.2; tested on HA 2026.2.3
 # (see const.TESTED_HA_VERSION, US0029).
