@@ -123,8 +123,16 @@ def _is_entity_exposed(
 
         return async_should_expose(hass, "conversation", entity_id)
     except ImportError:
-        # Fallback for older HA versions
-        return True
+        # US0027/AC4 + CR-0002/G4: fail CLOSED. If HA's exposure helper cannot be
+        # imported we must NOT expose every entity (the previous fail-open bug);
+        # skip the entity. Deliberate, logged fallback so a genuine HA-API move is
+        # visible rather than silently hiding (or over-exposing) the home.
+        _LOGGER.warning(
+            "HA exposure helper unavailable; failing CLOSED for %s "
+            "(entity skipped). This may indicate an HA version/API change.",
+            entity_id,
+        )
+        return False
 
 
 def build_entity_context(

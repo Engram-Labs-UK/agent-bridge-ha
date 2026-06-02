@@ -267,3 +267,77 @@ class TestHandleMessage:
         assert metadata is not None
         assert metadata["source"] == "voice"
         assert metadata["device_id"] == "device-123"
+
+
+class TestActuationSafetyAndAudit:
+    """US0027: deny/confirm caution (R3) + actuation audit hook (AC3)."""
+
+    @pytest.mark.asyncio
+    async def test_safety_caution_when_risky_domain_exposed(self, hass):
+        client = MagicMock()
+        client.chat = AsyncMock(return_value=CHAT_SUCCESS)
+        entity = _make_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        # A lock is exposed -> the grounding prompt must carry a deny/confirm caution.
+        with patch(
+            "custom_components.agent_bridge.conversation.async_get_exposed_entities",
+            AsyncMock(return_value=["lock.front_door"]),
+        ), patch(
+            "custom_components.agent_bridge.conversation.build_entity_context",
+            return_value="Front Door (lock.front_door): locked",
+        ):
+            await entity._async_handle_message(_conversation_input(), chat_log)
+
+        system_msg = client.chat.call_args.args[0][0]["content"]
+        assert "SAFETY" in system_msg
+        assert "lock" in system_msg
+
+    @pytest.mark.asyncio
+    async def test_no_caution_when_no_risky_domain(self, hass):
+        client = MagicMock()
+        client.chat = AsyncMock(return_value=CHAT_SUCCESS)
+        entity = _make_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        with patch(
+            "custom_components.agent_bridge.conversation.async_get_exposed_entities",
+            AsyncMock(return_value=["light.kitchen"]),
+        ), patch(
+            "custom_components.agent_bridge.conversation.build_entity_context",
+            return_value="Kitchen (light.kitchen): on",
+        ):
+            await entity._async_handle_message(_conversation_input(), chat_log)
+
+        system_msg = client.chat.call_args.args[0][0]["content"]
+        assert "SAFETY" not in system_msg
+
+    @pytest.mark.asyncio
+    async def test_actuation_audit_event_fires(self, hass):
+        from custom_components.agent_bridge.const import EVENT_ACTUATION_AUDIT
+
+        client = MagicMock()
+        client.chat = AsyncMock(return_value=CHAT_SUCCESS)
+        entity = _make_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        events = []
+        hass.bus.async_listen(EVENT_ACTUATION_AUDIT, lambda e: events.append(e))
+
+        with patch(
+            "custom_components.agent_bridge.conversation.async_get_exposed_entities",
+            AsyncMock(return_value=["lock.front_door"]),
+        ), patch(
+            "custom_components.agent_bridge.conversation.build_entity_context",
+            return_value="",
+        ):
+            await entity._async_handle_message(
+                _conversation_input(device_id="d1"), chat_log
+            )
+        await hass.async_block_till_done()
+
+        assert len(events) == 1
+        data = events[0].data
+        assert data["agent_id"] == "cora"
+        assert data["conversation_id"] == "conv-1"
+        assert data["risky_domains_exposed"] == ["lock"]

@@ -42,6 +42,24 @@ EVENT_AGENT_DISCOVERED = f"{DOMAIN}_agent_discovered"
 EVENT_AGENT_REMOVED = f"{DOMAIN}_agent_removed"
 EVENT_BRIDGE_UPGRADED = f"{DOMAIN}_bridge_upgraded"
 
+# Actuation audit surface (US0027/AC3). The agent actuates HA itself via its own
+# /api/mcp mount; this HA-side event is the documented hook point that US0031 wires
+# to the bridge audit log (one audit surface, Rule 3). Fired once per reactive turn.
+EVENT_ACTUATION_AUDIT = f"{DOMAIN}_actuation_audit"
+
+# Safety-relevant domains the agent must confirm before actuating (US0027 deny/confirm
+# list; from the US0021 live-fleet consult). The conversation entity folds a caution
+# into the grounding prompt when any exposed entity is in one of these domains.
+DENY_CONFIRM_DOMAINS = frozenset(
+    {
+        "lock",  # door/cabinet locks
+        "alarm_control_panel",  # intruder alarms
+        "climate",  # heating/cooling
+        "water_heater",  # heating
+        "cover",  # external doors / garage / gates
+    }
+)
+
 # Bridge webhook event catalogue (v4.36 -- US0024/G10).
 # bridge:upgraded is the drift signal the CR-0002 audit is about; it must be
 # observed, not polled for.

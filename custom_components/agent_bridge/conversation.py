@@ -44,7 +44,9 @@ from .const import (
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_CONTINUATION_EXCLUSIONS,
     DEFAULT_CONTINUATION_PHRASES,
+    DENY_CONFIRM_DOMAINS,
     DOMAIN,
+    EVENT_ACTUATION_AUDIT,
     EVENT_MESSAGE_RECEIVED,
     SUBENTRY_TYPE_CONVERSATION,
 )
@@ -108,6 +110,34 @@ def _build_system_prompt(
         parts.append(extra_system_prompt)
 
     return "\n\n".join(parts)
+
+
+def _risky_domains_present(exposed_entity_ids: list[str]) -> set[str]:
+    """Return the deny/confirm domains present among the exposed entities (US0027)."""
+    present: set[str] = set()
+    for entity_id in exposed_entity_ids:
+        domain = entity_id.split(".", 1)[0]
+        if domain in DENY_CONFIRM_DOMAINS:
+            present.add(domain)
+    return present
+
+
+def _safety_caution(risky_domains: set[str]) -> str:
+    """Build the deny/confirm caution folded into the grounding prompt (US0027).
+
+    The agent actuates HA itself; this instructs it to confirm with the user
+    before acting on safety-relevant domains (locks, alarms, heating, external
+    doors) and to read live state back to confirm the result.
+    """
+    if not risky_domains:
+        return ""
+    domains = ", ".join(sorted(risky_domains))
+    return (
+        "SAFETY: before actuating safety-relevant devices "
+        f"({domains}), confirm with the user first, then read the device's live "
+        "state back to verify the change. Never silently actuate locks, alarms, "
+        "heating, or external doors."
+    )
 
 
 def _detect_continuation(response_text: str) -> bool:
@@ -285,10 +315,15 @@ class AgentBridgeConversationEntity(ConversationEntity):
             max_chars=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
             strategy=options.get(CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY),
         )
+        risky_domains = _risky_domains_present(exposed_ids)
+        extra_prompt = getattr(user_input, "extra_system_prompt", None)
+        caution = _safety_caution(risky_domains)
+        if caution:
+            extra_prompt = f"{extra_prompt}\n\n{caution}" if extra_prompt else caution
         system_prompt = _build_system_prompt(
             area_name=area_name,
             entity_context=entity_context,
-            extra_system_prompt=getattr(user_input, "extra_system_prompt", None),
+            extra_system_prompt=extra_prompt,
         )
 
         # History is sourced from ChatLog (US0026/AC2), not SessionManager.
@@ -340,6 +375,22 @@ class AgentBridgeConversationEntity(ConversationEntity):
                 "agent_id": self._agent_id,
                 "model": model,
                 "content_preview": text[:200],
+            },
+        )
+
+        # US0027/AC3: actuation audit surface. The agent actuates HA itself via its
+        # own /api/mcp mount and emits the authoritative per-actuation event from
+        # there; this HA-side event is the documented hook point US0031 wires to the
+        # bridge audit log, recording the reactive turn that could actuate.
+        self.hass.bus.async_fire(
+            EVENT_ACTUATION_AUDIT,
+            {
+                "agent_id": self._agent_id,
+                "conversation_id": chat_log.conversation_id,
+                "area": area_name,
+                "is_voice": is_voice,
+                "risky_domains_exposed": sorted(risky_domains),
+                "reply_preview": text[:200],
             },
         )
 

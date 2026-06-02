@@ -6,12 +6,37 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import sys
+
 from custom_components.agent_bridge.exposure import (
     _format_entity,
     _get_entity_area,
     _get_relevant_attributes,
+    _is_entity_exposed,
     build_entity_context,
 )
+
+
+class TestIsEntityExposed:
+    """US0027/AC4: exposure must fail CLOSED on import failure (no expose-all)."""
+
+    def test_fails_closed_on_import_error(self):
+        hass = MagicMock()
+        # Force the HA exposure helper import to raise ImportError.
+        with patch.dict(
+            sys.modules,
+            {"homeassistant.components.homeassistant.exposed_entities": None},
+        ):
+            result = _is_entity_exposed(hass, "conversation.x", "light.kitchen")
+        assert result is False  # fail closed, never expose-all
+
+    def test_delegates_to_async_should_expose(self):
+        hass = MagicMock()
+        with patch(
+            "homeassistant.components.homeassistant.exposed_entities.async_should_expose",
+            return_value=True,
+        ):
+            assert _is_entity_exposed(hass, "conversation.x", "light.kitchen") is True
 
 
 def _make_state(entity_id, state="on", name=None, attributes=None):
