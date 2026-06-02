@@ -87,12 +87,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "session_manager": session_manager,
     }
 
+    # The conversation entity platform (in PLATFORMS) creates one
+    # ConversationEntity per bridge agent and auto-registers it as an Assist
+    # agent -- the legacy direct-registration call is gone (US0025).
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Register conversation agent
-    from .conversation import async_setup_conversation_agent
-
-    await async_setup_conversation_agent(hass, entry)
 
     # Listen for options updates
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
@@ -133,10 +131,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data.get("webhook_subscription_id"),
     )
 
-    # Unregister conversation agent
-    from .conversation import async_unload_conversation_agent
-
-    await async_unload_conversation_agent(hass, entry)
+    # The conversation entities unload with the platform
+    # (async_unload_platforms below) -- the legacy direct-unregister call is gone (US0025).
 
     # Unregister services (only if last entry)
     if len(hass.data.get(DOMAIN, {})) <= 1:

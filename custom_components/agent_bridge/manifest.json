@@ -3,7 +3,7 @@
     "name": "Agent Bridge",
     "codeowners": ["@DarrenBenson"],
     "config_flow": true,
-    "dependencies": [],
+    "dependencies": ["conversation"],
     "documentation": "https://github.com/Engram-Labs-UK/agent-bridge-ha",
     "iot_class": "local_polling",
     "issue_tracker": "https://github.com/Engram-Labs-UK/agent-bridge-ha/issues",

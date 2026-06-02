@@ -6,13 +6,20 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigSubentryFlow,
+    OptionsFlow,
+    SubentryFlowResult,
+)
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .client import BridgeAuthError, BridgeClient, BridgeConnectionError, BridgeError
 from .const import (
+    CONF_AGENT_ID,
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
     CONF_CONTEXT_MAX_CHARS,
@@ -28,6 +35,7 @@ from .const import (
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_THINKING_TIMEOUT,
     DOMAIN,
+    SUBENTRY_TYPE_CONVERSATION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -133,6 +141,65 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> AgentBridgeOptionsFlow:
         """Get the options flow handler."""
         return AgentBridgeOptionsFlow(config_entry)
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Add a bridge agent as a conversation subentry -> one entity (US0025)."""
+        return {SUBENTRY_TYPE_CONVERSATION: ConversationSubentryFlowHandler}
+
+
+class ConversationSubentryFlowHandler(ConfigSubentryFlow):
+    """Subentry flow to add one bridge agent as a ConversationEntity (US0025)."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Pick a bridge agent to expose as an Assist conversation entity."""
+        errors: dict[str, str] = {}
+        entry = self._get_entry()
+
+        if user_input is not None:
+            agent_id = user_input[CONF_AGENT_ID]
+            return self.async_create_entry(
+                title=user_input.get("name") or agent_id,
+                data={CONF_AGENT_ID: agent_id},
+            )
+
+        agent_options = await self._discover_agent_options(entry)
+        if not agent_options:
+            errors["base"] = "no_agents"
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_AGENT_ID): vol.In(agent_options) if agent_options else str,
+                }
+            ),
+            errors=errors,
+        )
+
+    async def _discover_agent_options(self, entry: ConfigEntry) -> dict[str, str]:
+        """Discover bridge agents for the subentry picker."""
+        try:
+            session = async_get_clientsession(self.hass)
+            client = BridgeClient(
+                session,
+                entry.data[CONF_BRIDGE_URL],
+                entry.data[CONF_BRIDGE_TOKEN],
+                timeout=10,
+                ssl_verify=entry.options.get(CONF_SSL_VERIFY, True),
+            )
+            agents = await client.discover()
+            return {
+                a["id"]: f"{a.get('name', a['id'])} ({a.get('status', 'unknown')})" for a in agents
+            }
+        except Exception:
+            _LOGGER.warning("Could not discover agents for conversation subentry")
+            return {}
 
 
 class AgentBridgeOptionsFlow(OptionsFlow):

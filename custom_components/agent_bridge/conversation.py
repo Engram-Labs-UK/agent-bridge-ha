@@ -1,39 +1,55 @@
-"""Conversation agent for Agent Bridge -- HA Assist integration."""
+"""Conversation entity for Agent Bridge -- HA Assist integration.
+
+US0025/US0026 (EP0007): one ``ConversationEntity`` per bridge agent, created via
+config subentries (HA 2025.2+ pattern, mirroring the OpenAI/Google integrations),
+using ``_async_handle_message`` + ``ChatLog`` instead of the retired legacy
+``AbstractConversationAgent`` direct-registration path and the bespoke
+``SessionManager`` history.
+
+Per the refined Option A (US0021 spike), this entity is the Assist front-end: it
+forwards the utterance + an entity grounding hint as **free text** to the selected
+bridge agent and returns the reply. The agent actuates HA itself via its own
+``/api/mcp`` mount (US0027/US0031) -- this entity does not run an HA tool loop.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
 from homeassistant.components import conversation
-from homeassistant.components.conversation import AbstractConversationAgent
+from homeassistant.components.conversation import (
+    AssistantContent,
+    ChatLog,
+    ConversationEntity,
+    UserContent,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import intent
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .client import BridgeClient, BridgeError
 from .const import (
+    CONF_AGENT_ID,
     CONF_CONTEXT_MAX_CHARS,
     CONF_CONTEXT_STRATEGY,
     CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
-    CONF_ENABLE_TOOL_CALLS,
-    CONF_VOICE_AGENT,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_CONTINUATION_EXCLUSIONS,
     DEFAULT_CONTINUATION_PHRASES,
     DOMAIN,
     EVENT_MESSAGE_RECEIVED,
-    MAX_TOOL_ITERATIONS,
+    SUBENTRY_TYPE_CONVERSATION,
 )
 from .exposure import async_get_exposed_entities, build_entity_context
-from .helpers import extract_response_text, extract_tool_calls
-from .tool_executor import execute_tool_call
+from .helpers import extract_response_text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,7 +91,11 @@ def _build_system_prompt(
     entity_context: str,
     extra_system_prompt: str | None,
 ) -> str:
-    """Build the three-layer system prompt: room + entities + extra."""
+    """Build the three-layer system prompt: room + entities + extra.
+
+    The entity context is a **grounding hint** (names/areas/aliases), not state
+    authority -- the agent reads live HA state itself before acting (US0027).
+    """
     parts: list[str] = []
 
     if area_name:
@@ -103,8 +123,6 @@ def _detect_continuation(response_text: str) -> bool:
     if not text.endswith("?"):
         return False
 
-    # Extract final sentence (split on . ! and take last non-empty)
-    # Simple heuristic: find last sentence-ending punctuation before the final ?
     text_lower = text.lower()
 
     # Check exclusion phrases first
@@ -137,297 +155,153 @@ async def _stream_chat(
     return "".join(parts) if parts else None
 
 
-class AgentBridgeConversationAgent(AbstractConversationAgent):
-    """Conversation agent that routes through the Agent Bridge."""
+def _messages_from_chat_log(chat_log: ChatLog) -> list[dict[str, Any]]:
+    """Convert ``ChatLog`` history into bridge chat messages (US0026/AC2).
+
+    History is sourced from ``ChatLog`` (not the retired ``SessionManager``).
+    System content is rebuilt per-turn, so it is skipped here.
+    """
+    messages: list[dict[str, Any]] = []
+    for content in chat_log.content:
+        role = getattr(content, "role", None)
+        text = getattr(content, "content", None)
+        if role == "system" or not text:
+            continue
+        if role in ("user", "assistant"):
+            messages.append({"role": role, "content": text})
+    return messages
+
+
+def _agents_from_entry(entry: ConfigEntry) -> list[tuple[str, str, str | None]]:
+    """Resolve (agent_id, agent_name, subentry_id) tuples to host entities for.
+
+    Prefers config subentries of type ``conversation`` (US0025). Falls back to the
+    single configured default agent for installs that predate subentries -- migration
+    is offered, not forced.
+    """
+    agents: list[tuple[str, str, str | None]] = []
+    for subentry_id, subentry in entry.subentries.items():
+        if getattr(subentry, "subentry_type", None) != SUBENTRY_TYPE_CONVERSATION:
+            continue
+        agent_id = subentry.data.get(CONF_AGENT_ID)
+        if not agent_id:
+            continue
+        agent_name = getattr(subentry, "title", None) or agent_id
+        agents.append((agent_id, agent_name, subentry_id))
+
+    if not agents:
+        default_agent = entry.data.get(CONF_DEFAULT_AGENT)
+        if default_agent:
+            agents.append((default_agent, default_agent, None))
+
+    return agents
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up the conversation platform: one entity per bridge agent (US0025)."""
+    data = hass.data[DOMAIN][config_entry.entry_id]
+    client: BridgeClient = data["client"]
+
+    for agent_id, agent_name, subentry_id in _agents_from_entry(config_entry):
+        entity = AgentBridgeConversationEntity(
+            config_entry,
+            client,
+            agent_id=agent_id,
+            agent_name=agent_name,
+            subentry_id=subentry_id,
+        )
+        if subentry_id is not None:
+            async_add_entities([entity], config_subentry_id=subentry_id)
+        else:
+            async_add_entities([entity])
+        _LOGGER.debug("Added conversation entity for agent %s", agent_id)
+
+
+class AgentBridgeConversationEntity(ConversationEntity):
+    """A Home Assistant ``ConversationEntity`` backed by one bridge agent."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self,
-        hass: HomeAssistant,
         entry: ConfigEntry,
         client: BridgeClient,
+        *,
+        agent_id: str,
+        agent_name: str,
+        subentry_id: str | None = None,
     ) -> None:
-        self.hass = hass
+        """Initialise the entity for a single bridge agent."""
         self.entry = entry
         self.client = client
+        self._agent_id = agent_id
+        self._attr_name = agent_name
+        unique_suffix = subentry_id or agent_id
+        self._attr_unique_id = f"{entry.entry_id}_{unique_suffix}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._attr_unique_id)},
+            name=agent_name,
+            manufacturer="Agent Bridge",
+            model=agent_id,
+            entry_type=DeviceEntryType.SERVICE,
+        )
 
     @property
     def supported_languages(self) -> list[str] | str:
-        """Return supported languages (delegate to AI model)."""
+        """Return supported languages (delegate to the AI model)."""
         return MATCH_ALL
 
-    async def async_process(
+    async def _async_handle_message(
         self,
         user_input: conversation.ConversationInput,
+        chat_log: ChatLog,
     ) -> conversation.ConversationResult:
-        """Process a conversation turn."""
+        """Handle one conversation turn via ``ChatLog`` (US0026).
+
+        Forwards the utterance + a grounding hint as free text to this entity's
+        bridge agent and returns the reply. Actuation is the agent's own job
+        (US0027); no HA tool loop runs here.
+        """
         options = self.entry.options
 
-        # Resolve agent
+        # Ensure the user's turn is in the log. The base async_process path adds it
+        # via async_get_chat_log; this guard keeps direct invocation (tests) correct.
+        if not chat_log.content or chat_log.content[-1].role != "user":
+            chat_log.async_add_user_content(UserContent(user_input.text))
+
         is_voice = user_input.device_id is not None
-        if is_voice:
-            agent_id = self.entry.data.get(
-                CONF_VOICE_AGENT,
-                self.entry.data.get(CONF_DEFAULT_AGENT),
-            )
-        else:
-            agent_id = self.entry.data.get(CONF_DEFAULT_AGENT)
-
-        # Resolve room context
-        device_id = user_input.device_id
-        # HA 2025+ may provide satellite_id separate from device_id
         satellite_id = getattr(user_input, "satellite_id", None)
-        area_name = _resolve_area_name(self.hass, satellite_id or device_id)
+        area_name = _resolve_area_name(self.hass, satellite_id or user_input.device_id)
 
-        # Build entity context
-        agent_entity_id = f"conversation.{DOMAIN}"
-        exposed_ids = await async_get_exposed_entities(self.hass, agent_entity_id)
+        # Entity grounding hint (names/areas/aliases) -- a hint, not state authority.
+        exposed_ids = await async_get_exposed_entities(self.hass, self.entity_id)
         entity_context = build_entity_context(
             self.hass,
             exposed_ids,
             max_chars=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
             strategy=options.get(CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY),
         )
-
-        # Build system prompt
-        extra_system_prompt = getattr(user_input, "extra_system_prompt", None)
         system_prompt = _build_system_prompt(
             area_name=area_name,
             entity_context=entity_context,
-            extra_system_prompt=extra_system_prompt,
+            extra_system_prompt=getattr(user_input, "extra_system_prompt", None),
         )
 
-        # Get or create session
-        from . import SessionManager
-
-        data = self.hass.data[DOMAIN][self.entry.entry_id]
-        session_manager: SessionManager = data["session_manager"]
-        channel = session_manager.get_or_create(agent_id or "default")
-
-        # Build metadata for voice requests
-        metadata: dict[str, Any] | None = None
-        if is_voice:
-            metadata = {
-                "source": "voice",
-                "device_id": device_id,
-                "area": area_name,
-                "language": user_input.language,
-            }
-            if satellite_id:
-                metadata["satellite_id"] = satellite_id
-
-        # Debug logging
-        if options.get(CONF_DEBUG_LOGGING, False):
-            _LOGGER.info(
-                "Voice routing: agent=%s session=%s area=%s device=%s satellite=%s",
-                agent_id,
-                channel,
-                area_name,
-                device_id,
-                satellite_id,
-            )
-
-        # Build initial messages
+        # History is sourced from ChatLog (US0026/AC2), not SessionManager.
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input.text},
+            *_messages_from_chat_log(chat_log),
         ]
 
-        # Attempt streaming for first voice request, fall back to non-streaming
-        enable_tools = options.get(CONF_ENABLE_TOOL_CALLS, True)
-        exposed_set = set(exposed_ids)
-        response_text: str | None = None
-        response: dict[str, Any] = {}
-        iterations = 0
-        used_streaming = False
-
-        try:
-            # First request: try streaming for voice (no tool calls expected yet)
-            if is_voice and not enable_tools:
-                # Pure streaming (no tool loop) -- simplest path
-                try:
-                    streamed = await _stream_chat(
-                        self.client,
-                        messages,
-                        agent=agent_id,
-                        channel=channel,
-                        metadata=metadata,
-                    )
-                    if streamed is not None:
-                        response_text = streamed
-                        used_streaming = True
-                except asyncio.CancelledError:
-                    # Never swallow cancellation -- propagate it.
-                    raise
-                except BridgeError as err:
-                    _LOGGER.warning("Streaming failed (%s), falling back to non-streaming", err)
-                except Exception:
-                    # A real fault on the voice path this component exists to serve --
-                    # log at error (not a silent debug swallow) before falling back.
-                    _LOGGER.exception("Unexpected streaming error, falling back to non-streaming")
-
-            if not used_streaming:
-                # Standard tool call loop (ADR-005: max 10 iterations)
-                while iterations < MAX_TOOL_ITERATIONS:
-                    iterations += 1
-
-                    response = await self.client.chat(
-                        messages,
-                        agent=agent_id,
-                        channel=channel,
-                        metadata=metadata,
-                    )
-
-                    tool_calls = extract_tool_calls(response) if enable_tools else []
-                    content = extract_response_text(response)
-
-                    if not tool_calls:
-                        response_text = content
-                        break
-
-                    # Execute tool calls (ADR-005: tools first, preserve content)
-                    assistant_message: dict[str, Any] = {
-                        "role": "assistant",
-                        "content": content,
-                        "tool_calls": tool_calls,
-                    }
-                    messages.append(assistant_message)
-
-                    for tc in tool_calls:
-                        result = await execute_tool_call(self.hass, tc, exposed_set)
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tc.get("id", ""),
-                                "content": _json_str(result),
-                            }
-                        )
-
-                    # Metadata only needed on first request
-                    metadata = None
-
-                else:
-                    # Loop cap exceeded
-                    response_text = ERROR_MESSAGES["TOOL_LOOP"]
-
-        except BridgeError as err:
-            response_text = ERROR_MESSAGES.get(err.code, str(err))
-
-        # Save session after conversation
-        await session_manager.async_save()
-
-        # Fire event
-        agent_response = response_text or ""
-        model = ""
-        if isinstance(response, dict):
-            model = response.get("model", "")
-            agent_id = response.get("agent", agent_id)
-
-        self.hass.bus.async_fire(
-            EVENT_MESSAGE_RECEIVED,
-            {
-                "agent_id": agent_id,
-                "model": model,
-                "content_preview": agent_response[:200],
-            },
-        )
-
-        # Build result
-        intent_response = intent.IntentResponse(language=user_input.language)
-        intent_response.async_set_speech(agent_response)
-
-        continue_conversation = _detect_continuation(agent_response)
-
-        return conversation.ConversationResult(
-            response=intent_response,
-            conversation_id=channel,
-            continue_conversation=continue_conversation,
-        )
-
-
-def _json_str(data: Any) -> str:
-    """Convert data to JSON string for tool results."""
-    import json
-
-    return json.dumps(data, default=str)
-
-
-class PerAgentConversationAgent(AgentBridgeConversationAgent):
-    """Conversation agent for a specific bridge agent (per-agent mode)."""
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        client: BridgeClient,
-        agent_id: str,
-        agent_name: str,
-    ) -> None:
-        super().__init__(hass, entry, client)
-        self._fixed_agent_id = agent_id
-        self._agent_name = agent_name
-
-    async def async_process(
-        self,
-        user_input: conversation.ConversationInput,
-    ) -> conversation.ConversationResult:
-        """Process a conversation turn routed to this specific agent."""
-        # Override agent resolution -- always use this agent
-        # Store original method reference to restore later
-        original_data = self.entry.data
-
-        # Temporarily override default agent so the parent class routes correctly
-        patched_data = dict(original_data)
-        patched_data[CONF_DEFAULT_AGENT] = self._fixed_agent_id
-        patched_data[CONF_VOICE_AGENT] = self._fixed_agent_id
-
-        # Use a simple approach: call parent with agent forced
-        # The parent reads CONF_DEFAULT_AGENT / CONF_VOICE_AGENT from entry.data
-        # We can't safely patch entry.data, so override inline instead
-
-        return await self._process_with_agent(user_input, self._fixed_agent_id)
-
-    async def _process_with_agent(
-        self,
-        user_input: conversation.ConversationInput,
-        agent_id: str,
-    ) -> conversation.ConversationResult:
-        """Process with a specific forced agent ID."""
-        options = self.entry.options
-
-        # Resolve room context
-        device_id = user_input.device_id
-        satellite_id = getattr(user_input, "satellite_id", None)
-        area_name = _resolve_area_name(self.hass, satellite_id or device_id)
-
-        # Build entity context
-        agent_entity_id = f"conversation.{DOMAIN}_{agent_id}"
-        exposed_ids = await async_get_exposed_entities(self.hass, agent_entity_id)
-        entity_context = build_entity_context(
-            self.hass,
-            exposed_ids,
-            max_chars=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
-            strategy=options.get(CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY),
-        )
-
-        extra_system_prompt = getattr(user_input, "extra_system_prompt", None)
-        system_prompt = _build_system_prompt(
-            area_name=area_name,
-            entity_context=entity_context,
-            extra_system_prompt=extra_system_prompt,
-        )
-
-        from . import SessionManager
-
-        data = self.hass.data[DOMAIN][self.entry.entry_id]
-        session_manager: SessionManager = data["session_manager"]
-        channel = session_manager.get_or_create(agent_id)
-
-        is_voice = device_id is not None
         metadata: dict[str, Any] | None = None
         if is_voice:
             metadata = {
                 "source": "voice",
-                "device_id": device_id,
+                "device_id": user_input.device_id,
                 "area": area_name,
                 "language": user_input.language,
             }
@@ -436,153 +310,44 @@ class PerAgentConversationAgent(AgentBridgeConversationAgent):
 
         if options.get(CONF_DEBUG_LOGGING, False):
             _LOGGER.info(
-                "Per-agent routing: agent=%s session=%s area=%s",
-                agent_id,
-                channel,
+                "Conversation turn: agent=%s conversation=%s area=%s voice=%s",
+                self._agent_id,
+                chat_log.conversation_id,
                 area_name,
+                is_voice,
             )
 
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input.text},
-        ]
-
-        enable_tools = options.get(CONF_ENABLE_TOOL_CALLS, True)
-        exposed_set = set(exposed_ids)
-        response_text: str | None = None
         response: dict[str, Any] = {}
-        iterations = 0
-
         try:
-            while iterations < MAX_TOOL_ITERATIONS:
-                iterations += 1
-                response = await self.client.chat(
-                    messages, agent=agent_id, channel=channel, metadata=metadata
-                )
-                tool_calls = extract_tool_calls(response) if enable_tools else []
-                content = extract_response_text(response)
-
-                if not tool_calls:
-                    response_text = content
-                    break
-
-                assistant_message: dict[str, Any] = {
-                    "role": "assistant",
-                    "content": content,
-                    "tool_calls": tool_calls,
-                }
-                messages.append(assistant_message)
-                for tc in tool_calls:
-                    result = await execute_tool_call(self.hass, tc, exposed_set)
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc.get("id", ""),
-                            "content": _json_str(result),
-                        }
-                    )
-                metadata = None
-            else:
-                response_text = ERROR_MESSAGES["TOOL_LOOP"]
+            response = await self.client.chat(
+                messages,
+                agent=self._agent_id,
+                channel=chat_log.conversation_id,
+                metadata=metadata,
+            )
+            text = extract_response_text(response) or ""
         except BridgeError as err:
-            response_text = ERROR_MESSAGES.get(err.code, str(err))
+            text = ERROR_MESSAGES.get(err.code, str(err))
 
-        await session_manager.async_save()
+        chat_log.async_add_assistant_content_without_tools(
+            AssistantContent(agent_id=self.entity_id, content=text)
+        )
 
-        agent_response = response_text or ""
         model = response.get("model", "") if isinstance(response, dict) else ""
-
         self.hass.bus.async_fire(
             EVENT_MESSAGE_RECEIVED,
             {
-                "agent_id": agent_id,
+                "agent_id": self._agent_id,
                 "model": model,
-                "content_preview": agent_response[:200],
+                "content_preview": text[:200],
             },
         )
 
         intent_response = intent.IntentResponse(language=user_input.language)
-        intent_response.async_set_speech(agent_response)
+        intent_response.async_set_speech(text)
 
         return conversation.ConversationResult(
             response=intent_response,
-            conversation_id=channel,
-            continue_conversation=_detect_continuation(agent_response),
+            conversation_id=chat_log.conversation_id,
+            continue_conversation=_detect_continuation(text),
         )
-
-
-async def async_setup_conversation_agent(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-) -> None:
-    """Register the primary conversation agent with HA."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    client: BridgeClient = data["client"]
-
-    agent = AgentBridgeConversationAgent(hass, entry, client)
-    conversation.async_set_agent(hass, entry, agent)
-    data["conversation_agent"] = agent
-    data["per_agent_entities"] = {}
-
-
-async def async_setup_per_agent_conversations(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    agents: list[dict[str, Any]],
-) -> None:
-    """Create per-agent conversation agent entities for discovered agents."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    client: BridgeClient = data["client"]
-    per_agent: dict[str, PerAgentConversationAgent] = data.get("per_agent_entities", {})
-
-    for agent_info in agents:
-        agent_id = agent_info.get("id", "")
-        capabilities = agent_info.get("capabilities", {})
-
-        # Only create for chat-capable agents
-        if not capabilities.get("chat", False):
-            continue
-
-        if agent_id not in per_agent:
-            agent_name = agent_info.get("name", agent_id)
-            per_agent_conv = PerAgentConversationAgent(hass, entry, client, agent_id, agent_name)
-            # Register with HA using a unique agent ID
-            conversation.async_set_agent(
-                hass, entry, per_agent_conv, agent_id=f"{DOMAIN}_{agent_id}"
-            )
-            per_agent[agent_id] = per_agent_conv
-            _LOGGER.info("Registered per-agent conversation: %s", agent_id)
-
-    data["per_agent_entities"] = per_agent
-
-
-async def async_remove_per_agent_conversation(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    agent_id: str,
-) -> None:
-    """Remove a per-agent conversation agent."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    per_agent: dict[str, PerAgentConversationAgent] = data.get("per_agent_entities", {})
-
-    if agent_id in per_agent:
-        conversation.async_unset_agent(hass, entry, agent_id=f"{DOMAIN}_{agent_id}")
-        del per_agent[agent_id]
-        _LOGGER.info("Unregistered per-agent conversation: %s", agent_id)
-
-
-async def async_unload_conversation_agent(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-) -> None:
-    """Unregister all conversation agents from HA."""
-    data = hass.data[DOMAIN].get(entry.entry_id, {})
-
-    # Unregister per-agent conversations
-    per_agent: dict[str, PerAgentConversationAgent] = data.get("per_agent_entities", {})
-    for agent_id in list(per_agent.keys()):
-        conversation.async_unset_agent(hass, entry, agent_id=f"{DOMAIN}_{agent_id}")
-    per_agent.clear()
-
-    # Unregister primary
-    conversation.async_unset_agent(hass, entry)

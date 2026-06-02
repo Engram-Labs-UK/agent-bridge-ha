@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 DOMAIN = "agent_bridge"
-PLATFORMS: list[str] = ["sensor", "binary_sensor", "event"]
+PLATFORMS: list[str] = ["conversation", "sensor", "binary_sensor", "event"]
+
+# Config subentry type: one conversation entity per bridge agent (US0025).
+SUBENTRY_TYPE_CONVERSATION = "conversation"
+CONF_AGENT_ID = "agent_id"
 
 # Config entry keys
 CONF_BRIDGE_URL = "bridge_url"
