@@ -56,8 +56,9 @@ Post-setup options available in **Settings > Devices & Services > Agent Bridge >
 
 ## Requirements
 
-- Home Assistant 2025.1.0+
-- Agent Bridge instance (v3.1.0+)
+- Home Assistant 2025.2.0+ (tested against 2026.2.3; modern `ConversationEntity` +
+  `ChatLog` + config subentries require 2025.2+)
+- Agent Bridge instance v4.36.0+ (the tested baseline; the v3.1-era contract has drifted)
 - Valid bridge API token
 
 ## Development

@@ -68,14 +68,21 @@ Check TRD before implementing -- it has interface definitions, API contracts, an
 
 ## Current State
 
-Brownfield. v0.1.0 shipped (EP0001-EP0006, US0001-US0020 Done): full component under
-`custom_components/agent_bridge/` with a pytest suite under `tests/`. Now executing **EP0007 /
-CR-0002** (target 0.2.0): re-align to bridge v4.36 + modern HA (`ConversationEntity` + `ChatLog`)
-and restore the reactive actuation path, which is currently structurally inert (agents reply but
-never actuate). Actuation design = **Option A refined**: the conversation entity forwards the
-utterance + a grounding hint as free text and the agent actuates HA itself via a shared `/api/mcp`
-mount (the DBee pattern) — not an `llm.Tool` round-trip. See `sdlc-studio/IMPLEMENTATION-KICKOFF.md`.
+Brownfield, **0.2.0** code/docs complete. EP0007 / CR-0002 (re-align to bridge v4.36 + modern HA)
+implemented across R1-R5 (248 tests green on HA 2026.2.3 / Python 3.13):
+- **Reactive path** re-platformed onto `ConversationEntity` + `ChatLog` (one entity per agent via
+  config subentries); legacy `AbstractConversationAgent`/`async_set_agent` deleted.
+- **Actuation** = Option A refined: the entity forwards the utterance + a grounding hint as free
+  text; the agent actuates HA itself via its own `/api/mcp` mount (not an `llm.Tool` round-trip).
+  Deny/confirm list + fail-closed exposure + an `EVENT_ACTUATION_AUDIT` hook are in place.
+- **v4.36 contract**: invoke/broadcast/SSE/webhook shapes, `x-bridge-mcp-caller`, health/metrics/
+  taxonomy capture, `/v1/health` tri-state, `bridge:upgraded` → drift repair issue, CI vs pinned HA.
+
+**Operator-gated remainder** (cannot be done from this repo): US0021 live reactive-turn logs;
+US0027 live "turn on the lights" E2E on the live HA (10.0.0.209); US0031 provisioning the shared
+`/api/mcp` mount into Cora/Eve/Julian harnesses + confirming the bridge audit-event wiring.
+See `sdlc-studio/IMPLEMENTATION-KICKOFF.md` and the EP0007 epic.
 
 ---
 
-*Version: 0.1.0 -- 2026-04-05 (EP0007 in flight toward 0.2.0)*
+*Version: 0.2.0 -- 2026-06-02 (code/docs complete; operator live-E2E + fleet provisioning pending)*

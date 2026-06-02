@@ -1,6 +1,6 @@
 # EP0007: Bridge v4.36 + Modern HA Re-Alignment
 
-> **Status:** Proposed
+> **Status:** Review — code+docs complete (US0022-US0026, US0028-US0030 Done); US0021/US0027/US0031 operator-gated (live HA + harness provisioning)
 > **Owner:** Darren Benson
 > **Reviewer:** --
 > **Created:** 2026-06-01
@@ -45,8 +45,8 @@ Re-platform the **reactive** path (HA → bridge agent) onto Home Assistant's mo
 | [US0027](../stories/US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | Review | US0026 | P1 |
 | [US0028](../stories/US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | Done | US0025 | P3 |
 | [US0029](../stories/US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | Done | US0024 | P3 |
-| [US0030](../stories/US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | Proposed | US0027 | P3 |
-| [US0031](../stories/US0031-shared-ha-envelope-audit-fleet-provisioning.md) | Shared HA tool envelope + actuation audit-events + Cora/Eve/Julian provisioning | Proposed | US0027 | P1 |
+| [US0030](../stories/US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | Done | US0027 | P3 |
+| [US0031](../stories/US0031-shared-ha-envelope-audit-fleet-provisioning.md) | Shared HA tool envelope + actuation audit-events + Cora/Eve/Julian provisioning | Review | US0027 | P1 |
 
 ## Execution Order
 

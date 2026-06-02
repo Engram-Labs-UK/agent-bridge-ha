@@ -1,9 +1,27 @@
 # US0031: Shared HA tool envelope + actuation audit-events + fleet provisioning
 
-> **Status:** Proposed
+> **Status:** Review — component-side done (audit hook + deny/confirm + envelope doc); harness provisioning + audit-mechanism confirmation operator/cross-repo-gated
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
+
+## R5 Implementation Status (2026-06-02)
+
+In-component pieces landed (R3/R5):
+- **AC1 (envelope defined once):** the shared HA tool contract is documented canonically
+  in the TRD "Reactive vs Proactive Boundary" section + this story (the `/api/mcp`
+  HA-MCP mount, read-before/after-write, deny/confirm list). No per-agent redefinition.
+- **AC2 (audit mechanism):** **decision recorded** — reuse the existing bridge audit tool
+  **`bridge_mark_critical_audit_event`** (no new `agent-bridge` CR needed); the component
+  emits the HA-side `EVENT_ACTUATION_AUDIT` hook each reactive turn (R3). *Operator to
+  confirm the bridge-side wiring.*
+- **AC4 (safety fleet-wide):** the deny/confirm domain list (`DENY_CONFIRM_DOMAINS`) +
+  read-back instruction are folded into the grounding prompt for every agent (R3).
+
+**Operator/cross-repo gated (cannot be done from this repo):**
+- **AC3:** provision the shared `/api/mcp` mount into Cora (openclaw) / Eve (codex) /
+  Julian (claude-code) harnesses, mirroring DBee's `~/.hermes/config.yaml`.
+- **AC2 wiring:** confirm `bridge_mark_critical_audit_event` receives the actuation events.
 
 ## User Story
 

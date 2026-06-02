@@ -8,7 +8,7 @@
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
-| Proposed | 1 |
+| Proposed | 0 |
 | Ready | 0 |
 | Approved | 0 |
 | In Progress | 0 |
@@ -25,7 +25,7 @@
 | [EP0004](EP0004-multi-agent.md) | Multi-Agent Support | Done | Darren Benson | 3 | 0.1.0 |
 | [EP0005](EP0005-realtime-and-broadcast.md) | Real-Time & Broadcast | Done | Darren Benson | 2 | 0.2.0 |
 | [EP0006](EP0006-advanced-voice.md) | Advanced Voice | Done | Darren Benson | 1 | 0.2.0 |
-| [EP0007](EP0007-bridge-v436-modern-ha-realignment.md) | Bridge v4.36 + Modern HA Re-Alignment | Proposed | Darren Benson | 11 | 0.2.0 |
+| [EP0007](EP0007-bridge-v436-modern-ha-realignment.md) | Bridge v4.36 + Modern HA Re-Alignment | Review | Darren Benson | 11 | 0.2.0 |
 
 ## Dependency Graph
 

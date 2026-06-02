@@ -7,12 +7,12 @@
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
-| Proposed | 2 |
+| Proposed | 0 |
 | Ready | 0 |
 | Planned | 0 |
 | In Progress | 1 |
-| Review | 1 |
-| Done | 27 |
+| Review | 2 |
+| Done | 28 |
 | **Total** | **31** |
 
 ## Stories by Epic
@@ -80,8 +80,8 @@
 | [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | Review | 8 | Darren Benson |
 | [US0028](US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | Done | 5 | Darren Benson |
 | [US0029](US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | Done | 5 | Darren Benson |
-| [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | Proposed | 2 | Darren Benson |
-| [US0031](US0031-shared-ha-envelope-audit-fleet-provisioning.md) | Shared HA tool envelope + actuation audit-events + Cora/Eve/Julian provisioning | Proposed | 5 | Darren Benson |
+| [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | Done | 2 | Darren Benson |
+| [US0031](US0031-shared-ha-envelope-audit-fleet-provisioning.md) | Shared HA tool envelope + actuation audit-events + Cora/Eve/Julian provisioning | Review | 5 | Darren Benson |
 
 ## All Stories
 
@@ -116,8 +116,8 @@
 | [US0027](US0027-restore-actuation-llm-api.md) | Restore reactive actuation — DBee-first proof (agent-direct) + fail-closed exposure | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Review | 8 |
 | [US0028](US0028-v436-discovery-health-surface.md) | Adopt v4.36 discovery/health surface (caller header, health, metrics, taxonomy, `/v1/health`) | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 5 |
 | [US0029](US0029-drift-defences.md) | Drift defences — agent-context awareness, version pin, CI vs current HA | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 5 |
-| [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 2 |
-| [US0031](US0031-shared-ha-envelope-audit-fleet-provisioning.md) | Shared HA tool envelope + actuation audit-events + Cora/Eve/Julian provisioning | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Proposed | 5 |
+| [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 2 |
+| [US0031](US0031-shared-ha-envelope-audit-fleet-provisioning.md) | Shared HA tool envelope + actuation audit-events + Cora/Eve/Julian provisioning | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Review | 5 |
 
 ## Notes
 

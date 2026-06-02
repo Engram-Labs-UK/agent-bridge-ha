@@ -94,9 +94,10 @@ HA custom component (thin adapter with coordinator pattern).
 | Bridge Client | HTTP communication with Agent Bridge REST API | aiohttp (HA shared session) |
 | Config Flow | UI-driven setup and options | HA ConfigFlow, voluptuous |
 | Data Coordinator | Periodic bridge health/discovery polling | HA DataUpdateCoordinator |
-| Conversation Agent | HA Assist integration, prompt building, tool call loop | HA AbstractConversationAgent |
-| Tool Executor | Execute HA services from agent tool_call responses | HA service registry |
-| Entity Exposure | Format HA entity state for AI context | HA entity/device/area registries |
+| Conversation Entity | HA Assist front-end, one per agent (config subentries); free-text forward + grounding hint via `_async_handle_message`/`ChatLog` | HA `ConversationEntity` (EP0007) |
+| ~~Tool Executor~~ | _Retired (EP0007): the agent actuates HA itself via its own `/api/mcp` mount; no HA-side tool loop_ | — |
+| Entity Exposure | Format HA entity state as a grounding **hint** for the agent (fail-closed) | HA entity/device/area registries |
+| Drift Defences | Fetch `/v1/agent-context` on `bridge:upgraded`, raise an HA repair issue past baseline | HA issue registry (`drift.py`) |
 | Sensor Platform | Bridge health and agent count sensors | HA SensorEntity |
 | Binary Sensor Platform | Connectivity and per-agent health sensors | HA BinarySensorEntity |
 | Event Platform | Message and tool invocation events | HA EventEntity |
@@ -105,6 +106,33 @@ HA custom component (thin adapter with coordinator pattern).
 | Continuation Detector | Analyse agent responses for follow-up question patterns | Internal (in conversation.py) |
 | Voice Debug Logger | Detailed logging of voice routing decisions (agent, session, area) | Python logging |
 | Helpers | Response text extraction, text normalisation | Internal |
+
+### Reactive vs Proactive Boundary (EP0007 / US0030)
+
+Two **non-overlapping** paths connect Home Assistant and the agent fleet. This
+component owns only the first; it documents — but does not implement — the second.
+
+| | Reactive (this component) | Proactive (agent-owned) |
+|---|---|---|
+| **Trigger** | User speaks to HA Assist | Agent decides to act (autonomy, schedules, peer requests) |
+| **Path** | Voice/Assist → `ConversationEntity._async_handle_message` → bridge agent (free text + grounding hint) → reply | Agent → its harness-mounted HA tool surface (`/api/mcp`, the DBee pattern) → HA service call |
+| **Who actuates HA** | **The agent**, via its own `/api/mcp` mount — *not* this component | The agent, via the same mount |
+| **Tool contract** | None on the bridge (v4.36 carries no `tool_calls`); HA exposure is a **grounding hint**, not authority | HA-MCP tools mounted per harness (US0031) |
+| **Audit** | `EVENT_ACTUATION_AUDIT` HA-side hook → bridge audit log (US0031) | Agent emits the authoritative per-actuation audit event from its mount |
+
+**Key consequence (the actuation fix):** because the bridge has no `tool_calls`
+contract, the reactive path cannot round-trip HA's LLM-API `llm.Tool` through the
+agent. So actuation is delegated to the agent's own HA mount (refined Option A,
+US0021). The component is the Assist front-end (voice/picker/room routing +
+grounding hint + audit hook); it cedes tool exposure to the `/api/mcp` mount (OQ3).
+
+**Voice metadata (OQ6):** `device_id`/`satellite_id`/`source`/`area`/`language`
+reach the agent via **prompt-fold** in the chat `metadata` field on the reactive
+turn (no bridge passthrough CR required for the chosen design).
+
+**Per-agent readiness** lives at the auth-gated **`/v1/health`** (tri-state +
+`toolSurface`/`readOnlySafe`), never a per-agent `depth` projection on `/health`
+(that was a phantom — the handler ignores the query string).
 
 ---
 

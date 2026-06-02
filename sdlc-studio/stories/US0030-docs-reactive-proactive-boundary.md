@@ -1,6 +1,6 @@
 # US0030: Document reactive/proactive boundary + update README/TRD to v4.36
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0007: Bridge v4.36 + Modern HA Re-Alignment](../epics/EP0007-bridge-v436-modern-ha-realignment.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-01
@@ -63,3 +63,4 @@ G12 context + H7: the now-working proactive path (DBee via `/api/mcp`) overlaps 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-01 | Claude | Initial story for EP0007 (CR-0002 redesign) |
+| 2026-06-02 | Claude | R5: TRD boundary + /v1/health correction + README v4.36 floor; grep-verified; status -> Done |
