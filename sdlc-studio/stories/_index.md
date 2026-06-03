@@ -1,6 +1,6 @@
 # Story Registry
 
-**Last Updated:** 2026-06-02
+**Last Updated:** 2026-06-03
 
 ## Summary
 
@@ -122,5 +122,5 @@
 ## Notes
 
 - Stories are numbered globally (US0001, US0002, etc.)
-- 20 stories across EP0001–EP0006 are Done; 11 stories (US0021–US0031) for EP0007 (CR-0002 redesign, filed 2026-06-01): US0021 In Progress (decision recorded; AC2 pending operator logs), US0022–US0031 Proposed.
+- 20 stories across EP0001–EP0006 are Done; 11 stories (US0021–US0031) for EP0007 (CR-0002 redesign, filed 2026-06-01): US0022–US0026 and US0028–US0030 Done, US0027 and US0031 Review (component-side done, operator/cross-repo-gated), US0021 In Progress (decision recorded; AC2 pending operator logs).
 - Stories tracked in [Epic Registry](../epics/_index.md)
