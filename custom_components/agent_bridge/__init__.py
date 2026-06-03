@@ -15,15 +15,14 @@ from .client import BridgeClient
 from .const import (
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
-    CONF_CALLER_ID,
     CONF_SSL_VERIFY,
     CONF_THINKING_TIMEOUT,
-    DEFAULT_CALLER_ID,
     DEFAULT_THINKING_TIMEOUT,
     DOMAIN,
     PLATFORMS,
 )
 from .coordinator import AgentBridgeCoordinator
+from .helpers import resolve_caller_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     ssl_verify = entry.options.get(CONF_SSL_VERIFY, True)
     timeout = entry.options.get(CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT)
-    caller_id = entry.options.get(CONF_CALLER_ID, DEFAULT_CALLER_ID)
+    caller_id = resolve_caller_id(entry)
 
     client = BridgeClient(
         session,

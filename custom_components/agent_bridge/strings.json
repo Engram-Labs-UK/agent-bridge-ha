@@ -38,7 +38,11 @@
                     "enable_tool_calls": "Allow tool execution",
                     "thinking_timeout": "Agent Response Timeout (seconds)",
                     "ssl_verify": "Verify SSL Certificates",
-                    "debug_logging": "Voice Debug Logging"
+                    "debug_logging": "Voice Debug Logging",
+                    "caller_id": "Caller ID (x-bridge-mcp-caller)"
+                },
+                "data_description": {
+                    "caller_id": "Registered agent id this Home Assistant presents to the bridge so it can resolve your crew. Leave blank to use the selected agent."
                 }
             }
         }

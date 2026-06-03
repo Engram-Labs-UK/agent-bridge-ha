@@ -64,6 +64,10 @@ ERROR_MESSAGES: dict[str, str] = {
     "CIRCUIT_OPEN": "The agent is temporarily offline.",
     "NO_CAPABLE_AGENT": "No agent is available to handle this request.",
     "AUTH_ERROR": "There is an authentication problem with the bridge.",
+    "CALLER_ERROR": (
+        "The bridge does not recognise this Home Assistant's agent identity. "
+        "Check the caller ID in the Agent Bridge options."
+    ),
     "RATE_LIMITED": "The agent is busy. Please try again shortly.",
     "CONNECTION_ERROR": "The bridge is offline.",
     "TIMEOUT": "The request timed out. Please try again.",

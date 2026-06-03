@@ -29,10 +29,38 @@ class BridgeConnectionError(BridgeError):
 
 
 class BridgeAuthError(BridgeError):
-    """Authentication failed."""
+    """Authentication failed -- the bridge token is missing, wrong, or expired."""
 
     def __init__(self, message: str = "Authentication failed") -> None:
         super().__init__("AUTH_ERROR", message)
+
+
+class BridgeCallerError(BridgeError):
+    """Caller identity rejected -- the ``x-bridge-mcp-caller`` agent is not registered.
+
+    Distinct from :class:`BridgeAuthError`: the token is valid, but bridge v4.36
+    cannot resolve the caller's crew for cross-agent dispatch because the caller id
+    is not a registered agent (BG0004). Surfaced separately so the user is pointed
+    at the caller configuration rather than the token.
+    """
+
+    def __init__(self, message: str = "Caller identity not recognised by bridge") -> None:
+        super().__init__("CALLER_ERROR", message)
+
+
+# Bridge error codes that mean "the caller identity is not authorised", not "bad token".
+_CALLER_ERROR_CODES = {"TOOL_PERMISSION_DENIED", "CALLER_NOT_REGISTERED", "CREW_RESOLUTION_FAILED"}
+
+
+def _is_caller_permission_error(code: str | None, message: str | None) -> bool:
+    """Classify a 403 as a caller-identity problem rather than a token problem."""
+    if code and code.upper() in _CALLER_ERROR_CODES:
+        return True
+    if message:
+        lowered = message.lower()
+        if "not a registered agent" in lowered or "caller" in lowered:
+            return True
+    return False
 
 
 class BridgeTimeoutError(BridgeError):
@@ -65,6 +93,21 @@ class BridgeClient:
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._ssl: bool | None = None if ssl_verify else False
 
+    @staticmethod
+    async def _error_payload(
+        resp: aiohttp.ClientResponse,
+    ) -> tuple[str | None, str | None]:
+        """Best-effort ``(code, message)`` from an error response body."""
+        try:
+            if resp.content_type and "json" in resp.content_type:
+                data = await resp.json()
+                error = data.get("error", {}) if isinstance(data, dict) else {}
+                if isinstance(error, dict):
+                    return error.get("code"), error.get("message")
+        except (aiohttp.ClientError, ValueError):
+            pass
+        return None, None
+
     async def _request(
         self,
         method: str,
@@ -88,8 +131,15 @@ class BridgeClient:
                 timeout=request_timeout,
                 ssl=self._ssl,
             ) as resp:
-                if resp.status in (401, 403):
-                    raise BridgeAuthError(f"Bridge returned {resp.status}: authentication failed")
+                if resp.status == 401:
+                    raise BridgeAuthError("Bridge returned 401: authentication failed")
+                if resp.status == 403:
+                    code, message = await self._error_payload(resp)
+                    if _is_caller_permission_error(code, message):
+                        raise BridgeCallerError(
+                            message or "Bridge rejected the Home Assistant caller identity"
+                        )
+                    raise BridgeAuthError(message or "Bridge returned 403: authentication failed")
 
                 if resp.content_type and "json" in resp.content_type:
                     data = await resp.json()
@@ -235,9 +285,17 @@ class BridgeClient:
                 f"Cannot connect to bridge at {self._base_url}: {err}"
             ) from err
 
-        if resp.status in (401, 403):
+        if resp.status == 401:
             resp.close()
-            raise BridgeAuthError(f"Bridge returned {resp.status}: authentication failed")
+            raise BridgeAuthError("Bridge returned 401: authentication failed")
+        if resp.status == 403:
+            code, message = await self._error_payload(resp)
+            resp.close()
+            if _is_caller_permission_error(code, message):
+                raise BridgeCallerError(
+                    message or "Bridge rejected the Home Assistant caller identity"
+                )
+            raise BridgeAuthError(message or "Bridge returned 403: authentication failed")
         if resp.status >= 400:
             resp.close()
             raise BridgeError(

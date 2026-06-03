@@ -9,6 +9,7 @@ import pytest
 
 from custom_components.agent_bridge.client import (
     BridgeAuthError,
+    BridgeCallerError,
     BridgeClient,
     BridgeConnectionError,
     BridgeError,
@@ -201,11 +202,50 @@ class TestErrorHandling:
             await client.health()
 
     @pytest.mark.asyncio
-    async def test_403_raises_auth_error(self, client, mock_response):
+    async def test_403_without_caller_signal_raises_auth_error(self, client, mock_response):
+        """A bare 403 (no caller-permission signal) is still a token auth failure."""
         resp = mock_response(status=403)
         client._session.request = MagicMock(return_value=resp)
-        with pytest.raises(BridgeAuthError):
+        with pytest.raises(BridgeAuthError) as exc_info:
             await client.health()
+        assert not isinstance(exc_info.value, BridgeCallerError)
+
+    @pytest.mark.asyncio
+    async def test_403_tool_permission_denied_raises_caller_error(self, client, mock_response):
+        """BG0004: 403 + TOOL_PERMISSION_DENIED is a caller-identity problem, not a token one."""
+        error_data = {
+            "error": {
+                "code": "TOOL_PERMISSION_DENIED",
+                "message": "Caller 'homeassistant' is not a registered agent",
+            }
+        }
+        resp = mock_response(status=403, json_data=error_data)
+        client._session.request = MagicMock(return_value=resp)
+        with pytest.raises(BridgeCallerError) as exc_info:
+            await client.chat([{"role": "user", "content": "ping"}], agent="cora")
+        assert exc_info.value.code == "CALLER_ERROR"
+        assert "not a registered agent" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_403_caller_message_without_known_code_raises_caller_error(
+        self, client, mock_response
+    ):
+        """Classification also keys off the message text, for unknown error codes."""
+        error_data = {"error": {"code": "SOME_OTHER", "message": "Unknown caller identity"}}
+        resp = mock_response(status=403, json_data=error_data)
+        client._session.request = MagicMock(return_value=resp)
+        with pytest.raises(BridgeCallerError):
+            await client.chat([{"role": "user", "content": "ping"}], agent="cora")
+
+    @pytest.mark.asyncio
+    async def test_401_is_never_a_caller_error(self, client, mock_response):
+        """401 is always a token problem, regardless of body."""
+        error_data = {"error": {"code": "TOOL_PERMISSION_DENIED", "message": "caller"}}
+        resp = mock_response(status=401, json_data=error_data)
+        client._session.request = MagicMock(return_value=resp)
+        with pytest.raises(BridgeAuthError) as exc_info:
+            await client.health()
+        assert not isinstance(exc_info.value, BridgeCallerError)
 
     @pytest.mark.asyncio
     async def test_timeout_raises_timeout_error(self, client):
@@ -257,6 +297,12 @@ class TestExceptionClasses:
     def test_bridge_auth_error(self):
         err = BridgeAuthError()
         assert err.code == "AUTH_ERROR"
+
+    def test_bridge_caller_error(self):
+        err = BridgeCallerError()
+        assert err.code == "CALLER_ERROR"
+        assert isinstance(err, BridgeError)
+        assert not isinstance(err, BridgeAuthError)
 
     def test_bridge_timeout_error(self):
         err = BridgeTimeoutError()

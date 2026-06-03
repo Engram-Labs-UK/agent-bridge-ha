@@ -1,6 +1,48 @@
 """Tests for helpers module -- response text extraction and tool call extraction."""
 
-from custom_components.agent_bridge.helpers import extract_response_text, extract_tool_calls
+from types import SimpleNamespace
+
+from custom_components.agent_bridge.const import (
+    CONF_CALLER_ID,
+    CONF_DEFAULT_AGENT,
+    DEFAULT_CALLER_ID,
+)
+from custom_components.agent_bridge.helpers import (
+    extract_response_text,
+    extract_tool_calls,
+    resolve_caller_id,
+)
+
+
+def _entry(*, options=None, data=None):
+    return SimpleNamespace(options=options or {}, data=data or {})
+
+
+class TestResolveCallerId:
+    """BG0004: effective x-bridge-mcp-caller must be a registered agent id."""
+
+    def test_explicit_option_wins(self):
+        entry = _entry(
+            options={CONF_CALLER_ID: "dbee"},
+            data={CONF_DEFAULT_AGENT: "openclaw-openclaw-cora"},
+        )
+        assert resolve_caller_id(entry) == "dbee"
+
+    def test_falls_back_to_default_agent(self):
+        entry = _entry(data={CONF_DEFAULT_AGENT: "openclaw-openclaw-cora"})
+        assert resolve_caller_id(entry) == "openclaw-openclaw-cora"
+
+    def test_blank_option_falls_back_to_default_agent(self):
+        entry = _entry(
+            options={CONF_CALLER_ID: "   "},
+            data={CONF_DEFAULT_AGENT: "openclaw-openclaw-cora"},
+        )
+        assert resolve_caller_id(entry) == "openclaw-openclaw-cora"
+
+    def test_last_resort_default(self):
+        assert resolve_caller_id(_entry()) == DEFAULT_CALLER_ID
+        # crucially, the legacy literal is never silently used when an agent is set
+        assert resolve_caller_id(_entry()) == "homeassistant"
 
 
 class TestExtractResponseText:

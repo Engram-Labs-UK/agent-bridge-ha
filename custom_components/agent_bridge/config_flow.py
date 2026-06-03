@@ -38,7 +38,6 @@ from .const import (
     CONF_THINKING_TIMEOUT,
     CONF_VOICE_AGENT,
     DEFAULT_BRIDGE_URL,
-    DEFAULT_CALLER_ID,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_PROMPT,
@@ -46,7 +45,7 @@ from .const import (
     DOMAIN,
     SUBENTRY_TYPE_CONVERSATION,
 )
-from .helpers import agent_crew, is_selectable_agent
+from .helpers import agent_crew, is_selectable_agent, resolve_caller_id
 
 ALL_CREWS = "__all__"
 
@@ -72,7 +71,7 @@ async def _discover_agents(hass, entry: ConfigEntry) -> list[dict[str, Any]]:
         entry.data[CONF_BRIDGE_TOKEN],
         timeout=10,
         ssl_verify=entry.options.get(CONF_SSL_VERIFY, True),
-        caller_id=entry.options.get(CONF_CALLER_ID, DEFAULT_CALLER_ID),
+        caller_id=resolve_caller_id(entry),
     )
     return await client.discover(include=["crew"])
 
@@ -359,6 +358,12 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                         CONF_DEBUG_LOGGING,
                         default=options.get(CONF_DEBUG_LOGGING, False),
                     ): bool,
+                    # BG0004: the bridge requires a registered agent id as the caller.
+                    # Blank falls back to the selected agent (always registered).
+                    vol.Optional(
+                        CONF_CALLER_ID,
+                        default=options.get(CONF_CALLER_ID, ""),
+                    ): str,
                 }
             ),
         )
