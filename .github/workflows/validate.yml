@@ -45,6 +45,10 @@ jobs:
         run: |
           pip install "homeassistant==${HA_VERSION}" \
             pytest pytest-asyncio pytest-homeassistant-custom-component
+          # The conversation component's requirements are loaded by HA at runtime,
+          # not pip-installed by the homeassistant package. conftest imports
+          # homeassistant.components.conversation, so install them explicitly.
+          pip install hassil home-assistant-intents
 
       - name: Run tests
         run: python -m pytest tests/ -q
