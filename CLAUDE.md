@@ -68,8 +68,14 @@ Check TRD before implementing -- it has interface definitions, API contracts, an
 
 ## Current State
 
-Brownfield, **0.2.0** code/docs complete. EP0007 / CR-0002 (re-align to bridge v4.36 + modern HA)
-implemented across R1-R5 (248 tests green on HA 2026.2.3 / Python 3.13):
+Brownfield, **0.3.2** released. EP0007 / CR-0002 (re-align to bridge v4.36 + modern HA)
+implemented across R1-R5 (248 tests green on HA 2026.2.3 / Python 3.13) at 0.2.0; CR-0003 /
+BG0003 (crew-scoped agent picker + editable HA-origin instructions) shipped in 0.3.0, with the
+0.3.1 crew-projection fix (`?include=crew`). 0.3.2 fixes BG0004: the default
+`x-bridge-mcp-caller` (`homeassistant`) is not a registered bridge agent, so v4.36 rejected
+every conversation turn with 403; `caller_id` now resolves to the configured agent (operator
+override in options) and caller-identity denials are reported distinctly from token failures.
+261+ tests green:
 - **Reactive path** re-platformed onto `ConversationEntity` + `ChatLog` (one entity per agent via
   config subentries); legacy `AbstractConversationAgent`/`async_set_agent` deleted.
 - **Actuation** = Option A refined: the entity forwards the utterance + a grounding hint as free
@@ -85,4 +91,4 @@ See `sdlc-studio/IMPLEMENTATION-KICKOFF.md` and the EP0007 epic.
 
 ---
 
-*Version: 0.2.0 -- 2026-06-02 (code/docs complete; operator live-E2E + fleet provisioning pending)*
+*Version: 0.3.2 -- 2026-06-04 (BG0004 caller_id fix; EP0007 operator live-E2E + fleet provisioning still pending)*
