@@ -49,7 +49,7 @@ building it (we did: the bridge already persists session by channel, 24h TTL).
 | [US0036](../stories/US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | Done | US0032 | P2 | 0.7.0 |
 | [US0037](../stories/US0037-proactive-announcements.md) | Proactive announcements to satellites (HA-as-client) | Done | none | P3 | 0.8.0 |
 | [US0038](../stories/US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | Proposed | US0035 | P3 | 0.9.0 |
-| [US0039](../stories/US0039-ai-task-platform.md) | AI Task platform (generate_data, scoped) | Proposed | none | P4 | 0.10.0 |
+| [US0039](../stories/US0039-ai-task-platform.md) | AI Task platform (generate_data, scoped) | Done | none | P4 | 0.9.0 |
 
 ## Execution Order
 

@@ -68,7 +68,10 @@ Check TRD before implementing -- it has interface definitions, API contracts, an
 
 ## Current State
 
-Brownfield, **0.8.0** released. 0.8.0 (EP0008 Phase 4, US0037) adds **proactive announcements**:
+Brownfield, **0.9.0** released. 0.9.0 (EP0008 Phase 6, US0039) adds an **AI Task platform**: one
+`ai_task` entity per agent so automations/dashboards/templates can call `ai_task.generate_data`
+for a summary or structured JSON (scoped — no image gen / schema registry). 0.8.0 (EP0008 Phase 4,
+US0037) adds **proactive announcements**:
 the `agent_bridge.announce` service speaks a message on a chosen `assist_satellite` with a
 priority (low/normal skip an unavailable satellite; critical always attempts). With Option A the
 agent triggers it via its own `/api/mcp` mount — no new HA listener. 0.7.0 (EP0008 Phase 2+3)
@@ -117,4 +120,4 @@ See `sdlc-studio/IMPLEMENTATION-KICKOFF.md` and the EP0007 epic.
 
 ---
 
-*Version: 0.8.0 -- 2026-06-05 (EP0008 Phase 4 / US0037 proactive announcements; EP0007 operator live-E2E + fleet provisioning still pending)*
+*Version: 0.9.0 -- 2026-06-05 (EP0008 Phase 6 / US0039 AI Task platform; EP0007 operator live-E2E + fleet provisioning still pending)*

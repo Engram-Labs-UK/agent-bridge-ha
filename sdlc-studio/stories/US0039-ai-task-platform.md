@@ -1,6 +1,6 @@
 # US0039: AI Task platform (generate_data, scoped)
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0008: Conversation Capability Expansion](../epics/EP0008-conversation-capability-expansion.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-05
@@ -59,3 +59,4 @@ this as a potential tarpit — keep it tightly scoped (no schema registry, no ap
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-05 | Claude | Initial story for EP0008 (CR-0004), Phase 6 |
+| 2026-06-05 | Claude | Implemented `ai_task.py` (one AITaskEntity per agent; `generate_data` → text, or JSON when a `structure` is requested, with code-fence stripping; BridgeError/parse errors → HomeAssistantError); `"ai_task"` added to PLATFORMS. Scoped per Cora: no image gen / schema registry / approval workflow. `_strip_code_fence` verified locally; entity tests CI-gated (ai_task component). Self-review: additive new platform, existing paths untouched; reuses conversation helpers. Status → Done |
