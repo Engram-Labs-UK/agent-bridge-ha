@@ -299,6 +299,39 @@ class TestHandleMessage:
         assert first == second  # within the idle window -> same session
 
 
+class TestConfirmBeforeActuate:
+    """US0036: [confirm:LEVEL] marker stripped, severity surfaced, turn kept open."""
+
+    @pytest.mark.asyncio
+    async def test_confirm_marker_handling(self, hass):
+        from custom_components.agent_bridge.const import EVENT_MESSAGE_RECEIVED
+
+        client = MagicMock()
+        client.chat = AsyncMock(
+            return_value={
+                "choices": [{"message": {"content": "[confirm:high] Shall I unlock the door?"}}],
+                "agent": "cora",
+                "model": "x",
+            }
+        )
+        entity = _make_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        events = []
+        hass.bus.async_listen(EVENT_MESSAGE_RECEIVED, lambda e: events.append(e))
+
+        p1, p2 = _patch_grounding()
+        with p1, p2:
+            result = await entity._async_handle_message(_conversation_input(), chat_log)
+        await hass.async_block_till_done()
+
+        # Marker stripped from the spoken text; conversation kept open.
+        assert result.response.speech["plain"]["speech"] == "Shall I unlock the door?"
+        assert result.continue_conversation is True
+        assert events[0].data["severity"] == "high"
+        assert events[0].data["awaiting_confirmation"] is True
+
+
 class TestStreaming:
     """US0033: opt-in response streaming into the ChatLog, with fallback."""
 

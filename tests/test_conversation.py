@@ -9,10 +9,12 @@ from custom_components.agent_bridge.conversation import (
     _build_source_context,
     _build_system_prompt,
     _detect_continuation,
+    _parse_confirm_marker,
     _resolve_area_name,
     _resolve_presence,
     _resolve_source_type,
     _resolve_upcoming,
+    _safety_caution,
     _session_channel,
     _session_scope,
 )
@@ -178,6 +180,43 @@ class TestBuildRecentChanges:
         hass = MagicMock()
         hass.states.get.side_effect = lambda eid: None
         assert build_recent_changes(hass, ["a.b"], now=now) == ""
+
+
+class TestParseConfirmMarker:
+    """US0036: strip [confirm:LEVEL] and surface severity."""
+
+    def test_high_marker_stripped(self):
+        text, sev = _parse_confirm_marker("[confirm:high] Shall I unlock the door?")
+        assert text == "Shall I unlock the door?"
+        assert sev == "high"
+
+    def test_normal_marker(self):
+        text, sev = _parse_confirm_marker("[confirm:normal] Turn off the lamp?")
+        assert text == "Turn off the lamp?"
+        assert sev == "normal"
+
+    def test_no_marker(self):
+        text, sev = _parse_confirm_marker("Done, the lights are on.")
+        assert text == "Done, the lights are on."
+        assert sev is None
+
+    def test_unknown_level_untouched(self):
+        text, sev = _parse_confirm_marker("[confirm:bogus] hi")
+        assert text == "[confirm:bogus] hi"
+        assert sev is None
+
+    def test_empty(self):
+        assert _parse_confirm_marker("") == ("", None)
+
+
+class TestSafetyCautionConfirm:
+    def test_caution_mentions_confirm_marker(self):
+        out = _safety_caution({"lock"})
+        assert "[confirm:high]" in out
+        assert "lock" in out
+
+    def test_no_caution_without_risky_domains(self):
+        assert _safety_caution(set()) == ""
 
 
 class TestResolveSourceType:

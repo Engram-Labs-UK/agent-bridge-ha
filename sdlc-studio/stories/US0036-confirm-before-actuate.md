@@ -1,6 +1,6 @@
 # US0036: Confirm-before-actuate (pendingAction + timeout + severity)
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0008: Conversation Capability Expansion](../epics/EP0008-conversation-capability-expansion.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-05
@@ -60,3 +60,4 @@ hint so HA can choose audio tone / visual emphasis.
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-05 | Claude | Initial story for EP0008 (CR-0004), Phase 3 |
+| 2026-06-05 | Claude | Implemented on top of US0032: `[confirm:LEVEL]` marker (`_parse_confirm_marker`) stripped from speech, severity + `awaiting_confirmation` surfaced on EVENT_MESSAGE_RECEIVED + audit event, conversation kept open on a pending confirm; safety caution expanded with the confirm protocol + 30s/5min timeout guidance. Self-review: no-marker turns are unchanged (additive event fields only); marker is start-anchored + allowlisted. Unit + integration tested. Status → Done |

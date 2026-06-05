@@ -15,6 +15,7 @@ bridge agent and returns the reply. The agent actuates HA itself via its own
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
@@ -439,10 +440,36 @@ def _safety_caution(risky_domains: set[str]) -> str:
     domains = ", ".join(sorted(risky_domains))
     return (
         "SAFETY: before actuating safety-relevant devices "
-        f"({domains}), confirm with the user first, then read the device's live "
-        "state back to verify the change. Never silently actuate locks, alarms, "
+        f"({domains}), ask the user a clear yes/no question first and prefix that "
+        "reply with [confirm:high] (use [confirm:normal] for lower-risk "
+        "confirmations). Home Assistant strips the marker, flags the confirmation, "
+        "and keeps the conversation open. Proceed only after the user confirms on "
+        "the next turn; if they do not confirm promptly (about 30s for voice, a few "
+        "minutes for text), treat the action as cancelled. After acting, read the "
+        "device's live state back to verify. Never silently actuate locks, alarms, "
         "heating, or external doors."
     )
+
+
+_CONFIRM_LEVELS = frozenset({"low", "normal", "high"})
+_CONFIRM_MARKER = re.compile(r"^\s*\[confirm:(\w+)\]\s*")
+
+
+def _parse_confirm_marker(text: str) -> tuple[str, str | None]:
+    """Strip a leading ``[confirm:LEVEL]`` marker (US0036).
+
+    The agent prefixes a safety-confirmation reply with ``[confirm:high]`` (or
+    ``normal``/``low``); HA strips it from the spoken text, surfaces the severity,
+    and keeps the conversation open so the user can answer. Returns
+    ``(clean_text, severity | None)``; unknown levels are left untouched.
+    """
+    match = _CONFIRM_MARKER.match(text or "")
+    if not match:
+        return text, None
+    level = match.group(1).lower()
+    if level not in _CONFIRM_LEVELS:
+        return text, None
+    return text[match.end() :].lstrip(), level
 
 
 def _detect_continuation(response_text: str) -> bool:
@@ -742,6 +769,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
         text = ""
         model = ""
         streamed = False
+        severity: str | None = None  # US0036: confirm-before-actuate severity
         if options.get(CONF_ENABLE_STREAMING, DEFAULT_ENABLE_STREAMING):
             # Track whether the delta stream appended an assistant turn so the
             # fallback runs ONLY when streaming added nothing -- never both, which
@@ -765,6 +793,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
                 # use it and skip the fallback to avoid a duplicate turn.
                 last = chat_log.content[-1]
                 text = getattr(last, "content", "") or ""
+                text, severity = _parse_confirm_marker(text)
                 streamed = True
 
         if not streamed:
@@ -780,6 +809,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
             except BridgeError as err:
                 text = ERROR_MESSAGES.get(err.code, str(err))
 
+            text, severity = _parse_confirm_marker(text)
             chat_log.async_add_assistant_content_without_tools(
                 AssistantContent(agent_id=self.entity_id, content=text)
             )
@@ -790,6 +820,10 @@ class AgentBridgeConversationEntity(ConversationEntity):
                 "agent_id": self._agent_id,
                 "model": model,
                 "content_preview": text[:200],
+                # US0036: confirm-before-actuate. severity is None unless the agent
+                # prefixed the reply with a [confirm:LEVEL] marker (now stripped).
+                "awaiting_confirmation": severity is not None,
+                "severity": severity,
             },
         )
 
@@ -808,6 +842,8 @@ class AgentBridgeConversationEntity(ConversationEntity):
                 "account_verified": bool(account and account.get("verified")),
                 "risky_domains_exposed": sorted(risky_domains),
                 "reply_preview": text[:200],
+                "awaiting_confirmation": severity is not None,
+                "severity": severity,
             },
         )
 
@@ -817,5 +853,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
         return conversation.ConversationResult(
             response=intent_response,
             conversation_id=chat_log.conversation_id,
-            continue_conversation=_detect_continuation(text),
+            # Keep the conversation open on a continuation OR a pending confirmation
+            # (US0036) so the user can answer the agent's yes/no question.
+            continue_conversation=_detect_continuation(text) or severity is not None,
         )

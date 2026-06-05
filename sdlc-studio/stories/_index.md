@@ -7,12 +7,12 @@
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
-| Proposed | 4 |
+| Proposed | 3 |
 | Ready | 0 |
 | Planned | 0 |
 | In Progress | 1 |
 | Review | 3 |
-| Done | 31 |
+| Done | 32 |
 | **Total** | **39** |
 
 ## Stories by Epic
@@ -91,7 +91,7 @@
 | [US0033](US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | Review | 3 | Darren Benson |
 | [US0034](US0034-richer-grounding-envelope.md) | Richer grounding: recent changes + presence + alarms/calendar | Done | 5 | Darren Benson |
 | [US0035](US0035-camera-vision-input.md) | Camera/vision input via image attachments | Done | 5 | Darren Benson |
-| [US0036](US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | Proposed | 5 | Darren Benson |
+| [US0036](US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | Done | 5 | Darren Benson |
 | [US0037](US0037-proactive-announcements.md) | Proactive announcements to satellites (HA-as-client) | Proposed | 8 | Darren Benson |
 | [US0038](US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | Proposed | 8 | Darren Benson |
 | [US0039](US0039-ai-task-platform.md) | AI Task platform (generate_data, scoped) | Proposed | 5 | Darren Benson |
@@ -135,7 +135,7 @@
 | [US0033](US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Review | 3 |
 | [US0034](US0034-richer-grounding-envelope.md) | Richer grounding: recent changes + presence + alarms/calendar | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Done | 5 |
 | [US0035](US0035-camera-vision-input.md) | Camera/vision input via image attachments | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Done | 5 |
-| [US0036](US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 5 |
+| [US0036](US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Done | 5 |
 | [US0037](US0037-proactive-announcements.md) | Proactive announcements to satellites (HA-as-client) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 8 |
 | [US0038](US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 8 |
 | [US0039](US0039-ai-task-platform.md) | AI Task platform (generate_data, scoped) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 5 |

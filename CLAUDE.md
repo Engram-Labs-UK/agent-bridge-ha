@@ -68,7 +68,12 @@ Check TRD before implementing -- it has interface definitions, API contracts, an
 
 ## Current State
 
-Brownfield, **0.6.0** released. 0.6.0 (EP0008 Phase 1b+1c) adds **opt-in response streaming**
+Brownfield, **0.7.0** released. 0.7.0 (EP0008 Phase 2+3) adds **camera/vision input**
+(`agent_bridge.ask_with_image` sends a camera snapshot as an image attachment, US0035) and
+**confirm-before-actuate** (US0036): the agent prefixes a safety confirmation with
+`[confirm:LEVEL]`, which HA strips from speech, surfaces as `severity`/`awaiting_confirmation`
+on its events, and keeps the conversation open for the user's yes/no. 0.6.0 (EP0008 Phase 1b+1c)
+adds **opt-in response streaming**
 to TTS (US0033, `CONF_ENABLE_STREAMING`, default off, fallback-safe) and a **richer grounding
 envelope** (US0034): recently-changed entities, presence/"who's home", and next alarm/calendar,
 folded into the caller_context source block. 0.5.0 (EP0008 Phase 1, US0032) adds **session
@@ -108,4 +113,4 @@ See `sdlc-studio/IMPLEMENTATION-KICKOFF.md` and the EP0007 epic.
 
 ---
 
-*Version: 0.6.0 -- 2026-06-05 (EP0008 Phase 1b+1c / US0033 opt-in streaming + US0034 richer grounding; EP0007 operator live-E2E + fleet provisioning still pending)*
+*Version: 0.7.0 -- 2026-06-05 (EP0008 Phase 2+3 / US0035 vision + US0036 confirm-before-actuate; EP0007 operator live-E2E + fleet provisioning still pending)*
