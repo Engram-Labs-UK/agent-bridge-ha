@@ -1,6 +1,6 @@
 # US0034: Richer grounding — recent changes + presence + alarms/calendar
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0008: Conversation Capability Expansion](../epics/EP0008-conversation-capability-expansion.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-05
@@ -66,3 +66,4 @@ a presence/"who's home" signal, and upcoming alarms/calendar context.
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-05 | Claude | Initial story for EP0008 (CR-0004), Phase 1c |
+| 2026-06-05 | Claude | Implemented: `build_recent_changes` (exposure, 30-min window, item+char bounded), `_resolve_presence` (who's home), `_resolve_upcoming` (next alarm + calendar); folded into caller_context + source block; handler reordered so exposure precedes the envelope. Review fix: char cap on recent-changes. Logic unit-verified; full pytest CI-gated. Status → Done |

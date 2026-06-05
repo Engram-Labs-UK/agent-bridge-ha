@@ -68,7 +68,11 @@ Check TRD before implementing -- it has interface definitions, API contracts, an
 
 ## Current State
 
-Brownfield, **0.5.0** released. 0.5.0 (EP0008 Phase 1, US0032) adds **session continuity**:
+Brownfield, **0.6.0** released. 0.6.0 (EP0008 Phase 1b+1c) adds **opt-in response streaming**
+to TTS (US0033, `CONF_ENABLE_STREAMING`, default off, fallback-safe) and a **richer grounding
+envelope** (US0034): recently-changed entities, presence/"who's home", and next alarm/calendar,
+folded into the caller_context source block. 0.5.0 (EP0008 Phase 1, US0032) adds **session
+continuity**:
 the bridge already persists a session per `channel` (24h TTL, confirmed by the Phase 0 spike),
 so the conversation entity now sends an **idle-windowed channel key** `ha:{agent_id}:{scope}:{epoch}`
 (scope = device → user → default) instead of the ephemeral `conversation_id`. Consecutive turns
@@ -104,4 +108,4 @@ See `sdlc-studio/IMPLEMENTATION-KICKOFF.md` and the EP0007 epic.
 
 ---
 
-*Version: 0.5.0 -- 2026-06-05 (EP0008 Phase 1 / US0032 session continuity via idle-windowed channel key; EP0007 operator live-E2E + fleet provisioning still pending)*
+*Version: 0.6.0 -- 2026-06-05 (EP0008 Phase 1b+1c / US0033 opt-in streaming + US0034 richer grounding; EP0007 operator live-E2E + fleet provisioning still pending)*

@@ -10,10 +10,13 @@ from custom_components.agent_bridge.conversation import (
     _build_system_prompt,
     _detect_continuation,
     _resolve_area_name,
+    _resolve_presence,
     _resolve_source_type,
+    _resolve_upcoming,
     _session_channel,
     _session_scope,
 )
+from custom_components.agent_bridge.exposure import build_recent_changes
 
 
 class TestBuildSystemPrompt:
@@ -99,6 +102,82 @@ class TestBuildSourceContext:
         result = _build_source_context({"source_type": "voice", "area": "Hall"})
         assert "(Hall)" in result
         assert ", " not in result.split("Source: voice", 1)[1].split("\n", 1)[0]
+
+    def test_grounding_extras_rendered(self):
+        result = _build_source_context(
+            {
+                "source_type": "text",
+                "presence": "home: Darren; away: Sam",
+                "upcoming": "next alarm 06:30",
+                "recent_changes": "Thermostat (climate.x): 23 (changed 20m ago)",
+            }
+        )
+        assert "Presence: home: Darren; away: Sam" in result
+        assert "Upcoming: next alarm 06:30" in result
+        assert "Recently changed:\nThermostat (climate.x): 23 (changed 20m ago)" in result
+
+
+class TestResolvePresence:
+    def test_home_and_away(self):
+        hass = MagicMock()
+        people = [
+            MagicMock(name="x", state="home"),
+            MagicMock(state="not_home"),
+        ]
+        people[0].name = "Darren"
+        people[1].name = "Sam"
+        hass.states.async_all.side_effect = lambda d: people if d == "person" else []
+        assert _resolve_presence(hass) == "home: Darren; away: Sam"
+
+    def test_none_when_no_persons(self):
+        hass = MagicMock()
+        hass.states.async_all.side_effect = lambda d: []
+        assert _resolve_presence(hass) is None
+
+
+class TestResolveUpcoming:
+    def test_next_alarm_and_calendar(self):
+        hass = MagicMock()
+        alarm = MagicMock(entity_id="sensor.phone_next_alarm", state="2026-06-06T06:30:00")
+        cal = MagicMock(state="on")
+        cal.attributes = {"message": "Bin day", "start_time": "2026-06-06 07:00"}
+
+        def _all(domain):
+            return {"sensor": [alarm], "calendar": [cal]}.get(domain, [])
+
+        hass.states.async_all.side_effect = _all
+        out = _resolve_upcoming(hass)
+        assert "next alarm 2026-06-06T06:30:00" in out
+        assert "calendar: Bin day at 2026-06-06 07:00" in out
+
+    def test_none_when_nothing(self):
+        hass = MagicMock()
+        hass.states.async_all.side_effect = lambda d: []
+        assert _resolve_upcoming(hass) is None
+
+
+class TestBuildRecentChanges:
+    def test_recent_within_window_sorted(self):
+        now = datetime(2026, 6, 5, 14, 0, 0)
+        hass = MagicMock()
+        recent = MagicMock(entity_id="climate.x", state="23")
+        recent.name = "Thermostat"
+        recent.last_changed = now - timedelta(minutes=20)
+        old = MagicMock(entity_id="light.y", state="on")
+        old.name = "Lamp"
+        old.last_changed = now - timedelta(hours=5)
+        states = {"climate.x": recent, "light.y": old}
+        hass.states.get.side_effect = lambda eid: states.get(eid)
+
+        out = build_recent_changes(hass, ["climate.x", "light.y"], now=now, window_s=1800)
+        assert "Thermostat (climate.x): 23 (changed 20m ago)" in out
+        assert "light.y" not in out  # 5h ago is outside the 30-min window
+
+    def test_empty_when_nothing_recent(self):
+        now = datetime(2026, 6, 5, 14, 0, 0)
+        hass = MagicMock()
+        hass.states.get.side_effect = lambda eid: None
+        assert build_recent_changes(hass, ["a.b"], now=now) == ""
 
 
 class TestResolveSourceType:

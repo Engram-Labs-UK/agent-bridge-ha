@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.core import HomeAssistant, State
@@ -193,3 +194,43 @@ def build_entity_context(
         context = "\n".join(truncated_lines)
 
     return context
+
+
+def build_recent_changes(
+    hass: HomeAssistant,
+    exposed_entity_ids: list[str],
+    *,
+    now: datetime,
+    window_s: int = 1800,
+    max_items: int = 10,
+    max_chars: int = 800,
+) -> str:
+    """List exposed entities that changed within the last ``window_s`` seconds.
+
+    A diagnostic grounding hint (US0034): "why is it so hot?" is answerable when
+    the agent can see the thermostat changed recently. Shows the current value +
+    rough age (old values would need the recorder -- out of scope). Bounded to
+    ``max_items`` and ``max_chars`` (the source block is not otherwise budgeted),
+    most-recent first; returns "" when nothing changed recently.
+    """
+    changed: list[tuple[float, State]] = []
+    for entity_id in exposed_entity_ids:
+        state = hass.states.get(entity_id)
+        if state is None:
+            continue
+        age = (now - state.last_changed).total_seconds()
+        if 0 <= age <= window_s:
+            changed.append((age, state))
+
+    changed.sort(key=lambda item: item[0])
+    lines: list[str] = []
+    total = 0
+    for age, state in changed[:max_items]:
+        mins = int(age // 60)
+        ago = f"{mins}m ago" if mins else "just now"
+        line = f"{state.name} ({state.entity_id}): {state.state} (changed {ago})"
+        if total + len(line) + 1 > max_chars:
+            break
+        lines.append(line)
+        total += len(line) + 1
+    return "\n".join(lines)

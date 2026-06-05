@@ -64,7 +64,11 @@ from .const import (
     EVENT_MESSAGE_RECEIVED,
     SUBENTRY_TYPE_CONVERSATION,
 )
-from .exposure import async_get_exposed_entities, build_entity_context
+from .exposure import (
+    async_get_exposed_entities,
+    build_entity_context,
+    build_recent_changes,
+)
 from .helpers import extract_response_text
 
 _LOGGER = logging.getLogger(__name__)
@@ -157,6 +161,43 @@ async def _resolve_account(
     return {"name": user.name, "verified": False}
 
 
+def _resolve_presence(hass: HomeAssistant) -> str | None:
+    """Summarise who is home (US0034) -- shapes safety gating more than device
+    metadata. Reads ``person.*`` states; returns None when no person entities."""
+    persons = hass.states.async_all("person")
+    if not persons:
+        return None
+    home = sorted(p.name for p in persons if p.state == "home")
+    away = sorted(p.name for p in persons if p.state not in ("home", "unknown", "unavailable"))
+    parts: list[str] = []
+    if home:
+        parts.append("home: " + ", ".join(home))
+    if away:
+        parts.append("away: " + ", ".join(away))
+    return "; ".join(parts) if parts else None
+
+
+def _resolve_upcoming(hass: HomeAssistant) -> str | None:
+    """Best-effort next-alarm + next-calendar-event hint (US0034). Omitted when
+    no such entities exist."""
+    bits: list[str] = []
+    for state in hass.states.async_all("sensor"):
+        if "next_alarm" in state.entity_id and state.state not in (
+            "unknown",
+            "unavailable",
+            "",
+        ):
+            bits.append(f"next alarm {state.state}")
+            break
+    for state in hass.states.async_all("calendar"):
+        message = state.attributes.get("message")
+        if state.state == "on" and message:
+            start = state.attributes.get("start_time")
+            bits.append(f"calendar: {message}" + (f" at {start}" if start else ""))
+            break
+    return "; ".join(bits) if bits else None
+
+
 def _resolve_source_type(user_input: conversation.ConversationInput) -> str:
     """Classify the turn source: ``voice`` | ``text`` | ``automation``.
 
@@ -179,11 +220,15 @@ def _build_caller_context(
     area_name: str | None,
     floor_name: str | None,
     account: dict[str, Any] | None,
+    presence: str | None = None,
+    upcoming: str | None = None,
+    recent_changes: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the structured source/speaker envelope sent to the bridge.
 
     Kept deliberately free of secrets, network identifiers, and firmware
-    detail (US live-agent consult): only who/what/where/when grounding.
+    detail (US live-agent consult): only who/what/where/when grounding, plus the
+    US0034 additions (presence, upcoming alarms/calendar, recent changes).
     """
     now = dt_util.now()
     context: dict[str, Any] = {
@@ -207,6 +252,12 @@ def _build_caller_context(
         context["floor"] = floor_name
     if account:
         context["account"] = account
+    if presence:
+        context["presence"] = presence
+    if upcoming:
+        context["upcoming"] = upcoming
+    if recent_changes:
+        context["recent_changes"] = recent_changes
     return context
 
 
@@ -249,6 +300,18 @@ def _build_source_context(caller_context: dict[str, Any]) -> str:
     language = caller_context.get("language")
     if language:
         lines.append(f"Language: {language}")
+
+    presence = caller_context.get("presence")
+    if presence:
+        lines.append(f"Presence: {presence}")
+
+    upcoming = caller_context.get("upcoming")
+    if upcoming:
+        lines.append(f"Upcoming: {upcoming}")
+
+    recent_changes = caller_context.get("recent_changes")
+    if recent_changes:
+        lines.append("Recently changed:\n" + recent_changes)
 
     return "\n".join(lines)
 
@@ -604,22 +667,8 @@ class AgentBridgeConversationEntity(ConversationEntity):
         satellite_id = user_input.satellite_id
         area_name, floor_name = _resolve_location(self.hass, satellite_id or user_input.device_id)
 
-        # Structured speaker/source/location envelope (who/what/where/when). Sent
-        # to the bridge as ``caller_context`` and rendered into the system prompt
-        # as a labelled block so the agent grounds and gates its actions.
-        source_type = _resolve_source_type(user_input)
-        account = await _resolve_account(self.hass, user_input.context)
-        caller_context = _build_caller_context(
-            self.hass,
-            user_input,
-            source_type=source_type,
-            area_name=area_name,
-            floor_name=floor_name,
-            account=account,
-        )
-        source_context = _build_source_context(caller_context)
-
         # Entity grounding hint (names/areas/aliases) -- a hint, not state authority.
+        # Computed before the caller_context so recent-changes can use the exposed set.
         exposed_ids = await async_get_exposed_entities(self.hass, self.entity_id)
         entity_context = build_entity_context(
             self.hass,
@@ -627,6 +676,27 @@ class AgentBridgeConversationEntity(ConversationEntity):
             max_chars=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
             strategy=options.get(CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY),
         )
+
+        # Structured speaker/source/location envelope (who/what/where/when) plus the
+        # US0034 grounding additions (presence, upcoming, recent changes). Sent to
+        # the bridge as ``caller_context`` and rendered into the system prompt as a
+        # labelled block so the agent grounds and gates its actions.
+        source_type = _resolve_source_type(user_input)
+        account = await _resolve_account(self.hass, user_input.context)
+        recent_changes = build_recent_changes(self.hass, exposed_ids, now=dt_util.utcnow())
+        caller_context = _build_caller_context(
+            self.hass,
+            user_input,
+            source_type=source_type,
+            area_name=area_name,
+            floor_name=floor_name,
+            account=account,
+            presence=_resolve_presence(self.hass),
+            upcoming=_resolve_upcoming(self.hass),
+            recent_changes=recent_changes or None,
+        )
+        source_context = _build_source_context(caller_context)
+
         risky_domains = _risky_domains_present(exposed_ids)
         extra_prompt = user_input.extra_system_prompt
         caution = _safety_caution(risky_domains)

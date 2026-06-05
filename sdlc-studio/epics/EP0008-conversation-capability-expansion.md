@@ -1,6 +1,6 @@
 # EP0008: Conversation Capability Expansion (continuity, proactive, multimodal)
 
-> **Status:** In Progress — Phase 0 spike + Phase 1 (US0032) Done (0.5.0); Phase 1b next
+> **Status:** In Progress — P1 done: US0032 (0.5.0), US0033 (Review), US0034 (0.6.0); P2 (vision) next
 > **Owner:** Darren Benson
 > **Reviewer:** --
 > **Created:** 2026-06-05
@@ -44,7 +44,7 @@ building it (we did: the bridge already persists session by channel, 24h TTL).
 |----|-------|--------|-----------|-------|--------|
 | [US0032](../stories/US0032-session-continuity-idle-channel.md) | Session continuity via idle-windowed channel key | Done | none | P1 | 0.5.0 |
 | [US0033](../stories/US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | Review | US0032 | P1 | 0.6.0 |
-| [US0034](../stories/US0034-richer-grounding-envelope.md) | Richer grounding: recent changes + presence + alarms/calendar | Proposed | none | P1 | 0.6.0 |
+| [US0034](../stories/US0034-richer-grounding-envelope.md) | Richer grounding: recent changes + presence + alarms/calendar | Done | none | P1 | 0.6.0 |
 | [US0035](../stories/US0035-camera-vision-input.md) | Camera/vision input via image attachments | Proposed | none | P2 | 0.7.0 |
 | [US0036](../stories/US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | Proposed | US0032 | P2 | 0.7.0 |
 | [US0037](../stories/US0037-proactive-announcements.md) | Proactive announcements to satellites (HA-as-client) | Proposed | none | P3 | 0.8.0 |
