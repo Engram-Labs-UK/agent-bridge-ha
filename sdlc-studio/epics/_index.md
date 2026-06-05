@@ -1,6 +1,6 @@
 # Epic Registry
 
-**Last Updated:** 2026-06-03
+**Last Updated:** 2026-06-05
 **PRD Reference:** [Product Requirements Document](../prd.md)
 
 ## Summary
@@ -11,10 +11,10 @@
 | Proposed | 0 |
 | Ready | 0 |
 | Approved | 0 |
-| In Progress | 0 |
+| In Progress | 1 |
 | Review | 1 |
 | Done | 6 |
-| **Total** | **7** |
+| **Total** | **8** |
 
 ## Epics
 
@@ -27,6 +27,7 @@
 | [EP0005](EP0005-realtime-and-broadcast.md) | Real-Time & Broadcast | Done | Darren Benson | 2 | 0.2.0 |
 | [EP0006](EP0006-advanced-voice.md) | Advanced Voice | Done | Darren Benson | 1 | 0.2.0 |
 | [EP0007](EP0007-bridge-v436-modern-ha-realignment.md) | Bridge v4.36 + Modern HA Re-Alignment | Review | Darren Benson | 11 | 0.2.0 |
+| [EP0008](EP0008-conversation-capability-expansion.md) | Conversation Capability Expansion | In Progress | Darren Benson | 8 | 0.5.0–0.10.0 |
 
 ## Dependency Graph
 
@@ -53,6 +54,7 @@ EP0001 (Bridge Foundation)
 | 5 | EP0005 | EP0001, EP0003 | 0.2.0 |
 | 6 | EP0006 | EP0001, EP0002 | 0.2.0 |
 | 7 | EP0007 | EP0002, EP0004 | 0.2.0 |
+| 8 | EP0008 | EP0007 | 0.5.0–0.10.0 |
 
 ## Notes
 
@@ -61,3 +63,4 @@ EP0001 (Bridge Foundation)
 - EP0001-EP0004 are Phase 1 (v0.1.0) -- core functionality
 - EP0005-EP0006 are Phase 2 (v0.2.0) -- enhancements
 - EP0007 (CR-0002) is the v4.36 + modern-HA re-alignment; restores the reactive home-control path (actuation Option A refined: agent-direct via a shared `/api/mcp` HA mount, not an `llm.Tool` round-trip). Supersedes CR-0001.
+- EP0008 (CR-0004) is the conversation capability expansion: session continuity, streaming, richer grounding, vision, confirm-before-actuate, proactive announcements, agent→Telegram image, AI Task. Stays on REST (no ACP); one minor release per phase, reconcile + full review at each phase close.

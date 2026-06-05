@@ -34,6 +34,7 @@ from .const import (
     CONF_DEFAULT_AGENT,
     CONF_ENABLE_TOOL_CALLS,
     CONF_PROMPT,
+    CONF_SESSION_IDLE_WINDOW,
     CONF_SSL_VERIFY,
     CONF_THINKING_TIMEOUT,
     CONF_VOICE_AGENT,
@@ -41,6 +42,7 @@ from .const import (
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_PROMPT,
+    DEFAULT_SESSION_IDLE_WINDOW,
     DEFAULT_THINKING_TIMEOUT,
     DOMAIN,
     SUBENTRY_TYPE_CONVERSATION,
@@ -350,6 +352,12 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                         CONF_THINKING_TIMEOUT,
                         default=options.get(CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT),
                     ): vol.All(int, vol.Range(min=10, max=3600)),
+                    # US0032: idle gap (s) that rotates the session channel key.
+                    # 0 = rotate every turn (no continuity); 86400 = bridge TTL cap.
+                    vol.Optional(
+                        CONF_SESSION_IDLE_WINDOW,
+                        default=options.get(CONF_SESSION_IDLE_WINDOW, DEFAULT_SESSION_IDLE_WINDOW),
+                    ): vol.All(int, vol.Range(min=0, max=86400)),
                     vol.Optional(
                         CONF_SSL_VERIFY,
                         default=options.get(CONF_SSL_VERIFY, True),

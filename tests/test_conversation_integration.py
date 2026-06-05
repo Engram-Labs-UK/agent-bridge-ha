@@ -274,6 +274,30 @@ class TestHandleMessage:
         assert caller_context["source_type"] == "text"
         assert "audio_only" not in caller_context
 
+    @pytest.mark.asyncio
+    async def test_session_channel_is_stable_and_scoped(self, hass):
+        """US0032: the bridge channel is the idle-windowed session key, not the
+        raw conversation_id, and two turns from the same device reuse it."""
+        client = MagicMock()
+        client.chat = AsyncMock(return_value=CHAT_SUCCESS)
+        entity = _make_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        p1, p2 = _patch_grounding()
+        with p1, p2:
+            await entity._async_handle_message(
+                _conversation_input(device_id="device-123"), chat_log
+            )
+            first = client.chat.call_args.kwargs["channel"]
+            await entity._async_handle_message(
+                _conversation_input(device_id="device-123"), chat_log
+            )
+            second = client.chat.call_args.kwargs["channel"]
+
+        assert first.startswith("ha:cora:dev:device-123:")
+        assert first != "conv-1"
+        assert first == second  # within the idle window -> same session
+
 
 class TestActuationSafetyAndAudit:
     """US0027: deny/confirm caution (R3) + actuation audit hook (AC3)."""

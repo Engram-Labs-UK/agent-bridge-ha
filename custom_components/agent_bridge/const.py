@@ -35,6 +35,8 @@ CONF_THINKING_TIMEOUT = "thinking_timeout"
 CONF_SSL_VERIFY = "ssl_verify"
 CONF_DEBUG_LOGGING = "debug_logging"
 CONF_CALLER_ID = "caller_id"  # x-bridge-mcp-caller identity (US0028/G9)
+# Seconds; idle gap that rotates the session channel key (US0032).
+CONF_SESSION_IDLE_WINDOW = "session_idle_window"
 
 # Defaults
 DEFAULT_CALLER_ID = "homeassistant"
@@ -42,6 +44,10 @@ DEFAULT_BRIDGE_URL = "http://localhost:18780"
 DEFAULT_CONTEXT_MAX_CHARS = 13000
 DEFAULT_CONTEXT_STRATEGY = "truncate"
 DEFAULT_THINKING_TIMEOUT = 120
+# Session idle window (US0032): consecutive turns from the same scope within this many seconds
+# reuse the bridge session (which the bridge persists per channel for 24h); a longer gap rotates
+# the channel key so context stays topically scoped instead of accumulating all day.
+DEFAULT_SESSION_IDLE_WINDOW = 600
 DEFAULT_POLL_INTERVAL = 30  # seconds
 DEFAULT_DISCOVERY_INTERVAL = 300  # seconds
 DEFAULT_TOOL_TIMEOUT = 10  # seconds per service call

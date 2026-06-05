@@ -68,7 +68,13 @@ Check TRD before implementing -- it has interface definitions, API contracts, an
 
 ## Current State
 
-Brownfield, **0.4.0** released. 0.4.0 adds a structured speaker/source/location envelope:
+Brownfield, **0.5.0** released. 0.5.0 (EP0008 Phase 1, US0032) adds **session continuity**:
+the bridge already persists a session per `channel` (24h TTL, confirmed by the Phase 0 spike),
+so the conversation entity now sends an **idle-windowed channel key** `ha:{agent_id}:{scope}:{epoch}`
+(scope = device → user → default) instead of the ephemeral `conversation_id`. Consecutive turns
+within `CONF_SESSION_IDLE_WINDOW` (default 600 s) share context; a longer gap or a backwards clock
+jump rotates the key. The per-entity epoch map is UTC-based and prunes scopes past the 24h TTL.
+0.4.0 added a structured speaker/source/location envelope:
 each turn now carries a `caller_context` (source type voice/text/automation, device/speaker
 name, area + floor, language, local time, best-effort unverified account) rendered into the
 system prompt as a labelled `[home-assistant-source]` block and sent as a `caller_context`
@@ -98,4 +104,4 @@ See `sdlc-studio/IMPLEMENTATION-KICKOFF.md` and the EP0007 epic.
 
 ---
 
-*Version: 0.4.0 -- 2026-06-05 (caller_context speaker/source/location envelope; EP0007 operator live-E2E + fleet provisioning still pending)*
+*Version: 0.5.0 -- 2026-06-05 (EP0008 Phase 1 / US0032 session continuity via idle-windowed channel key; EP0007 operator live-E2E + fleet provisioning still pending)*

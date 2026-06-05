@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 from custom_components.agent_bridge.conversation import (
@@ -10,6 +11,8 @@ from custom_components.agent_bridge.conversation import (
     _detect_continuation,
     _resolve_area_name,
     _resolve_source_type,
+    _session_channel,
+    _session_scope,
 )
 
 
@@ -110,6 +113,106 @@ class TestResolveSourceType:
     def test_text_otherwise(self):
         ui = MagicMock(device_id=None, context=MagicMock(parent_id=None))
         assert _resolve_source_type(ui) == "text"
+
+
+class TestSessionScope:
+    def test_device_scope(self):
+        ui = MagicMock(device_id="d1")
+        assert _session_scope(ui) == "dev:d1"
+
+    def test_user_scope_when_no_device(self):
+        ui = MagicMock(device_id=None, context=MagicMock(user_id="u1"))
+        assert _session_scope(ui) == "usr:u1"
+
+    def test_default_scope(self):
+        ui = MagicMock(device_id=None, context=MagicMock(user_id=None))
+        assert _session_scope(ui) == "default"
+
+
+class TestSessionChannel:
+    """US0032: idle-windowed channel-key rotation."""
+
+    def test_format_and_first_epoch(self):
+        epochs: dict = {}
+        t0 = datetime(2026, 6, 5, 14, 0, 0)
+        ch = _session_channel(epochs, agent_id="cora", scope="dev:d1", idle_window=600, now=t0)
+        assert ch == "ha:cora:dev:d1:1"
+
+    def test_reuse_within_idle_window(self):
+        epochs: dict = {}
+        t0 = datetime(2026, 6, 5, 14, 0, 0)
+        first = _session_channel(epochs, agent_id="cora", scope="dev:d1", idle_window=600, now=t0)
+        second = _session_channel(
+            epochs,
+            agent_id="cora",
+            scope="dev:d1",
+            idle_window=600,
+            now=t0 + timedelta(seconds=60),
+        )
+        assert first == second == "ha:cora:dev:d1:1"
+
+    def test_rotate_after_idle_window(self):
+        epochs: dict = {}
+        t0 = datetime(2026, 6, 5, 14, 0, 0)
+        _session_channel(epochs, agent_id="cora", scope="dev:d1", idle_window=600, now=t0)
+        rotated = _session_channel(
+            epochs,
+            agent_id="cora",
+            scope="dev:d1",
+            idle_window=600,
+            now=t0 + timedelta(seconds=601),
+        )
+        assert rotated == "ha:cora:dev:d1:2"
+
+    def test_idle_window_value_respected(self):
+        epochs: dict = {}
+        t0 = datetime(2026, 6, 5, 14, 0, 0)
+        _session_channel(epochs, agent_id="cora", scope="dev:d1", idle_window=10, now=t0)
+        rotated = _session_channel(
+            epochs,
+            agent_id="cora",
+            scope="dev:d1",
+            idle_window=10,
+            now=t0 + timedelta(seconds=15),
+        )
+        assert rotated.endswith(":2")
+
+    def test_scopes_are_independent(self):
+        epochs: dict = {}
+        t0 = datetime(2026, 6, 5, 14, 0, 0)
+        a = _session_channel(epochs, agent_id="cora", scope="dev:d1", idle_window=600, now=t0)
+        b = _session_channel(epochs, agent_id="cora", scope="dev:d2", idle_window=600, now=t0)
+        assert a == "ha:cora:dev:d1:1"
+        assert b == "ha:cora:dev:d2:1"
+
+    def test_backwards_clock_jump_rotates(self):
+        # NTP/manual rewind: a negative gap must mint a fresh session, not stick.
+        epochs: dict = {}
+        t0 = datetime(2026, 6, 5, 14, 0, 0)
+        _session_channel(epochs, agent_id="cora", scope="dev:d1", idle_window=600, now=t0)
+        rotated = _session_channel(
+            epochs,
+            agent_id="cora",
+            scope="dev:d1",
+            idle_window=600,
+            now=t0 - timedelta(seconds=120),
+        )
+        assert rotated == "ha:cora:dev:d1:2"
+
+    def test_stale_scopes_are_pruned(self):
+        # Entries past the bridge session TTL (24h) are dropped to bound the map.
+        epochs: dict = {}
+        t0 = datetime(2026, 6, 5, 14, 0, 0)
+        _session_channel(epochs, agent_id="cora", scope="dev:old", idle_window=600, now=t0)
+        _session_channel(
+            epochs,
+            agent_id="cora",
+            scope="dev:new",
+            idle_window=600,
+            now=t0 + timedelta(seconds=90000),  # > 24h after dev:old
+        )
+        assert "dev:old" not in epochs
+        assert "dev:new" in epochs
 
 
 class TestDetectContinuation:

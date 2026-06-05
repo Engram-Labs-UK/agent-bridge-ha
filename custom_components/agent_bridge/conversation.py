@@ -15,6 +15,7 @@ bridge agent and returns the reply. The agent actuates HA itself via its own
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components import conversation
@@ -47,11 +48,13 @@ from .const import (
     CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
     CONF_PROMPT,
+    CONF_SESSION_IDLE_WINDOW,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_CONTINUATION_EXCLUSIONS,
     DEFAULT_CONTINUATION_PHRASES,
     DEFAULT_PROMPT,
+    DEFAULT_SESSION_IDLE_WINDOW,
     DENY_CONFIRM_DOMAINS,
     DOMAIN,
     EVENT_ACTUATION_AUDIT,
@@ -256,6 +259,63 @@ def _format_location(caller_context: dict[str, Any]) -> str:
     if area:
         return f" ({area})"
     return ""
+
+
+def _session_scope(user_input: conversation.ConversationInput) -> str:
+    """Resolve the stable session scope for a turn: device -> user -> default.
+
+    The bridge persists a session per channel (24h TTL, Phase 0 spike), so the
+    scope is the natural per-satellite / per-speaker key. Area is derived from
+    the device, so a device id already covers it; text turns fall back to the
+    account, then a shared default.
+    """
+    if user_input.device_id:
+        return f"dev:{user_input.device_id}"
+    user_id = getattr(user_input.context, "user_id", None)
+    if user_id:
+        return f"usr:{user_id}"
+    return "default"
+
+
+# Stale scope entries are pruned once they pass the bridge's session TTL (24h):
+# the bridge session they referenced is gone, so the remembered epoch is useless.
+# This bounds ``_session_epochs`` to scopes seen recently (tiny for a home).
+_SESSION_EPOCH_TTL = 86400
+
+
+def _session_channel(
+    epochs: dict[str, tuple[int, datetime]],
+    *,
+    agent_id: str,
+    scope: str,
+    idle_window: float,
+    now: datetime,
+) -> str:
+    """Build the idle-windowed bridge channel key, rotating after an idle gap.
+
+    The bridge maps ``channel -> session_id`` (24h TTL) and resolves the session
+    automatically, so HA only needs to send a channel that stays stable across a
+    short window of related turns, then rotates. Consecutive turns for a scope
+    within ``idle_window`` reuse the same epoch (same session); a longer gap -- or
+    a backwards clock jump (NTP/manual) -- mints a new epoch (a fresh session).
+    Caller passes a UTC ``now`` so the delta is true elapsed time (DST-safe).
+    Mutates ``epochs`` in place; pure + clock-injected for testability (US0032).
+    """
+    existing = epochs.get(scope)
+    if existing is None:
+        epoch = 1
+    else:
+        epoch, last = existing
+        gap = (now - last).total_seconds()
+        if gap > idle_window or gap < 0:
+            epoch += 1
+    epochs[scope] = (epoch, now)
+    # Bound the map: drop scopes older than the bridge session TTL.
+    retention = max(idle_window, _SESSION_EPOCH_TTL)
+    stale = [s for s, (_, last) in epochs.items() if (now - last).total_seconds() > retention]
+    for s in stale:
+        del epochs[s]
+    return f"ha:{agent_id}:{scope}:{epoch}"
 
 
 def _build_system_prompt(
@@ -484,6 +544,10 @@ class AgentBridgeConversationEntity(ConversationEntity):
         self.client = client
         self._agent_id = agent_id
         self._prompt = prompt
+        # Idle-windowed session epochs per scope (US0032). The bridge persists
+        # session by channel; this map drives channel-key rotation after an idle
+        # gap so context stays topically scoped instead of running for 24h.
+        self._session_epochs: dict[str, tuple[int, datetime]] = {}
         self._attr_name = agent_name
         unique_suffix = subentry_id or agent_id
         self._attr_unique_id = f"{entry.entry_id}_{unique_suffix}"
@@ -565,11 +629,24 @@ class AgentBridgeConversationEntity(ConversationEntity):
             *_messages_from_chat_log(chat_log),
         ]
 
+        # Idle-windowed session channel (US0032): a stable key per scope that the
+        # bridge maps to a persisted session (24h TTL), rotating after an idle gap
+        # so related turns share context without accumulating all day. This is the
+        # bridge channel, distinct from the HA-side conversation_id returned below.
+        session_channel = _session_channel(
+            self._session_epochs,
+            agent_id=self._agent_id,
+            scope=_session_scope(user_input),
+            idle_window=options.get(CONF_SESSION_IDLE_WINDOW, DEFAULT_SESSION_IDLE_WINDOW),
+            now=dt_util.utcnow(),
+        )
+
         if options.get(CONF_DEBUG_LOGGING, False):
             _LOGGER.info(
-                "Conversation turn: agent=%s conversation=%s area=%s source=%s",
+                "Conversation turn: agent=%s conversation=%s channel=%s area=%s source=%s",
                 self._agent_id,
                 chat_log.conversation_id,
+                session_channel,
                 area_name,
                 source_type,
             )
@@ -579,7 +656,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
             response = await self.client.chat(
                 messages,
                 agent=self._agent_id,
-                channel=chat_log.conversation_id,
+                channel=session_channel,
                 caller_context=caller_context,
             )
             text = extract_response_text(response) or ""

@@ -84,6 +84,10 @@ async def async_handle_send_message(call: ServiceCall) -> ServiceResponse:
     messages = [{"role": "user", "content": message}]
 
     try:
+        # The service passes the caller-supplied session_id straight through as the
+        # bridge channel: scripted/automation callers want explicit, stable session
+        # control. This is intentionally distinct from the conversation entity's
+        # idle-windowed channel key (US0032), which auto-scopes per satellite/speaker.
         response = await client.chat(
             messages,
             agent=agent_id,
