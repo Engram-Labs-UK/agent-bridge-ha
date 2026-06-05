@@ -230,11 +230,14 @@ class BridgeClient:
         agent: str | None = None,
         channel: str | None = None,
         caller_context: dict[str, Any] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Send a chat completion request to the bridge.
 
         ``caller_context`` is the structured speaker/source/location envelope
         (who/what/where/when) the bridge records and renders for the agent.
+        ``attachments`` carries inbound media (e.g. a camera snapshot, US0035) as
+        the bridge's base64 attachment shape.
         """
         body: dict[str, Any] = {"messages": messages}
         if agent:
@@ -243,6 +246,8 @@ class BridgeClient:
             body["channel"] = channel
         if caller_context:
             body["caller_context"] = caller_context
+        if attachments:
+            body["attachments"] = attachments
         return await self._request("POST", "/v1/chat/completions", json=body)
 
     async def chat_stream(

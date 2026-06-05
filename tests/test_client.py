@@ -139,6 +139,20 @@ class TestChat:
         )
         assert result["agent"] == "cora"
 
+    @pytest.mark.asyncio
+    async def test_sends_attachments(self, client, mock_response):
+        resp = mock_response(json_data={"agent": "cora"})
+        client._session.request = MagicMock(return_value=resp)
+
+        await client.chat(
+            [{"role": "user", "content": "what's this?"}],
+            agent="cora",
+            attachments=[{"id": "a1", "mime_type": "image/jpeg", "base64": "AAA"}],
+        )
+        body = client._session.request.call_args.kwargs["json"]
+        assert body["attachments"][0]["mime_type"] == "image/jpeg"
+        assert body["attachments"][0]["base64"] == "AAA"
+
 
 class TestInvokeTool:
     @pytest.mark.asyncio
@@ -239,7 +253,6 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_timeout_raises_timeout_error(self, client):
-
         client._session.request = MagicMock(side_effect=TimeoutError())
         with pytest.raises(BridgeTimeoutError):
             await client.health()

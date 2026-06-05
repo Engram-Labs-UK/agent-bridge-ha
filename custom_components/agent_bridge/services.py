@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 from typing import Any
 
@@ -12,6 +13,7 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from .client import BridgeClient, BridgeError
@@ -24,6 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 SERVICE_SEND_MESSAGE = "send_message"
 SERVICE_INVOKE_TOOL = "invoke_tool"
 SERVICE_BROADCAST = "broadcast"
+SERVICE_ASK_WITH_IMAGE = "ask_with_image"
 
 SEND_MESSAGE_SCHEMA = vol.Schema(
     {
@@ -45,6 +48,15 @@ BROADCAST_SCHEMA = vol.Schema(
     {
         vol.Required("message"): cv.string,
         vol.Optional("tags"): vol.All(cv.ensure_list, [cv.string]),
+    }
+)
+
+ASK_WITH_IMAGE_SCHEMA = vol.Schema(
+    {
+        vol.Required("message"): cv.string,
+        vol.Required("camera_entity_id"): cv.entity_id,
+        vol.Optional("agent_id"): cv.string,
+        vol.Optional("session_id"): cv.string,
     }
 )
 
@@ -132,6 +144,56 @@ async def async_handle_invoke_tool(call: ServiceCall) -> ServiceResponse:
         }
 
 
+async def async_handle_ask_with_image(call: ServiceCall) -> ServiceResponse:
+    """Handle ask_with_image: snapshot a camera and send it to an agent (US0035)."""
+    # Imported lazily so the camera component is only required when this is used.
+    from homeassistant.components.camera import async_get_image
+
+    hass = call.hass
+    data = _get_entry_data(hass)
+    client: BridgeClient = data["client"]
+    coordinator: AgentBridgeCoordinator = data["coordinator"]
+
+    message = call.data["message"]
+    camera_entity_id = call.data["camera_entity_id"]
+    agent_id = call.data.get("agent_id")
+    session_id = call.data.get("session_id")
+
+    if agent_id:
+        _validate_agent_id(coordinator, agent_id)
+
+    try:
+        image = await async_get_image(hass, camera_entity_id, timeout=10)
+    except HomeAssistantError as err:
+        return {"response": "", "error": f"Could not capture {camera_entity_id}: {err}"}
+
+    b64 = base64.b64encode(image.content).decode("ascii")
+    attachments = [
+        {
+            "id": f"ha-camera-{camera_entity_id}",
+            "mime_type": image.content_type or "image/jpeg",
+            "base64": b64,
+            "source": {"bot_id": "homeassistant"},
+        }
+    ]
+    messages = [{"role": "user", "content": message}]
+
+    try:
+        response = await client.chat(
+            messages,
+            agent=agent_id,
+            channel=session_id,
+            attachments=attachments,
+        )
+        return {
+            "response": extract_response_text(response) or "",
+            "agent_id": response.get("agent", agent_id or ""),
+            "model": response.get("model", ""),
+        }
+    except BridgeError as err:
+        return {"response": "", "error": str(err)}
+
+
 def _normalise_broadcast_responses(raw: Any) -> list[dict[str, Any]]:
     """Normalise the v4.36 broadcast ``responses`` object into a list.
 
@@ -199,9 +261,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
 
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ASK_WITH_IMAGE,
+        async_handle_ask_with_image,
+        schema=ASK_WITH_IMAGE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
 
 async def async_unload_services(hass: HomeAssistant) -> None:
     """Unregister Agent Bridge services."""
     hass.services.async_remove(DOMAIN, SERVICE_SEND_MESSAGE)
     hass.services.async_remove(DOMAIN, SERVICE_INVOKE_TOOL)
     hass.services.async_remove(DOMAIN, SERVICE_BROADCAST)
+    hass.services.async_remove(DOMAIN, SERVICE_ASK_WITH_IMAGE)

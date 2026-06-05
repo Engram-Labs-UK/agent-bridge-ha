@@ -1,6 +1,6 @@
 # US0035: Camera/vision input via image attachments
 
-> **Status:** Proposed
+> **Status:** Done
 > **Epic:** [EP0008: Conversation Capability Expansion](../epics/EP0008-conversation-capability-expansion.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-05
@@ -58,3 +58,4 @@ sends none and `client.chat()` has no attachments param. Cora ranked this up: vi
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-05 | Claude | Initial story for EP0008 (CR-0004), Phase 2 |
+| 2026-06-05 | Claude | Implemented: `attachments` on `client.chat`; `agent_bridge.ask_with_image` service (camera.async_get_image → base64 bridge attachment) + services.yaml UI. Camera errors handled gracefully. Self-review: additive, existing chat paths unchanged; attachment shape matches bridge inbound contract; no hard size cap (camera snapshots are small — acceptable). Unit-tested. Status → Done |
