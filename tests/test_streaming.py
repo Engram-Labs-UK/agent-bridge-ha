@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
 
 from custom_components.agent_bridge.client import (
-    BridgeClient,
     BridgeAuthError,
+    BridgeClient,
     BridgeConnectionError,
     BridgeTimeoutError,
 )
-from custom_components.agent_bridge.conversation import _stream_chat
+from custom_components.agent_bridge.conversation import _stream_chat, _to_delta_stream
 
 
 class MockSSEResponse:
@@ -30,9 +30,11 @@ class MockSSEResponse:
         class _Content:
             def __init__(self, data):
                 self._data = data
+
             async def __aiter__(self_inner):
                 for chunk in self_inner._data:
                     yield chunk.encode("utf-8")
+
         return _Content(chunks)
 
     def close(self):
@@ -47,7 +49,7 @@ def _sse_line(content_text: str) -> str:
 
 def _v436_message(text: str) -> list[str]:
     """Build a v4.36 message frame: event:message then data:{text}."""
-    return ["event:message\n", f'data:{json.dumps({"text": text})}\n', "\n"]
+    return ["event:message\n", f"data:{json.dumps({'text': text})}\n", "\n"]
 
 
 class TestChatStreamV436:
@@ -81,9 +83,7 @@ class TestChatStreamV436:
         )
         session.request = AsyncMock(return_value=sse_resp)
 
-        parts = [
-            d async for d in await client.chat_stream([{"role": "user", "content": "Hi"}])
-        ]
+        parts = [d async for d in await client.chat_stream([{"role": "user", "content": "Hi"}])]
         assert parts == ["first"]
 
     @pytest.mark.asyncio
@@ -95,9 +95,7 @@ class TestChatStreamV436:
         sse_resp = MockSSEResponse([*_v436_message("only")])  # stream just ends
         session.request = AsyncMock(return_value=sse_resp)
 
-        parts = [
-            d async for d in await client.chat_stream([{"role": "user", "content": "Hi"}])
-        ]
+        parts = [d async for d in await client.chat_stream([{"role": "user", "content": "Hi"}])]
         assert parts == ["only"]
         assert sse_resp._closed
 
@@ -134,17 +132,18 @@ class TestStreamFailSafe:
 
 
 class TestChatStream:
-
     @pytest.mark.asyncio
     async def test_yields_content_deltas(self):
         session = MagicMock(spec=aiohttp.ClientSession)
         client = BridgeClient(session, "http://bridge:18780", "tok")
 
-        sse_resp = MockSSEResponse([
-            _sse_line("Hello"),
-            _sse_line(" world"),
-            "data: [DONE]\n",
-        ])
+        sse_resp = MockSSEResponse(
+            [
+                _sse_line("Hello"),
+                _sse_line(" world"),
+                "data: [DONE]\n",
+            ]
+        )
         session.request = AsyncMock(return_value=sse_resp)
 
         parts = []
@@ -160,17 +159,17 @@ class TestChatStream:
         session = MagicMock(spec=aiohttp.ClientSession)
         client = BridgeClient(session, "http://bridge:18780", "tok")
 
-        sse_resp = MockSSEResponse([
-            _sse_line("text"),
-            "data: [DONE]\n",
-            _sse_line("should not appear"),
-        ])
+        sse_resp = MockSSEResponse(
+            [
+                _sse_line("text"),
+                "data: [DONE]\n",
+                _sse_line("should not appear"),
+            ]
+        )
         session.request = AsyncMock(return_value=sse_resp)
 
         parts = []
-        async for delta in await client.chat_stream(
-            [{"role": "user", "content": "Hi"}]
-        ):
+        async for delta in await client.chat_stream([{"role": "user", "content": "Hi"}]):
             parts.append(delta)
 
         assert parts == ["text"]
@@ -180,18 +179,18 @@ class TestChatStream:
         session = MagicMock(spec=aiohttp.ClientSession)
         client = BridgeClient(session, "http://bridge:18780", "tok")
 
-        sse_resp = MockSSEResponse([
-            "\n",
-            ":\n",  # SSE comment
-            _sse_line("content"),
-            "data: [DONE]\n",
-        ])
+        sse_resp = MockSSEResponse(
+            [
+                "\n",
+                ":\n",  # SSE comment
+                _sse_line("content"),
+                "data: [DONE]\n",
+            ]
+        )
         session.request = AsyncMock(return_value=sse_resp)
 
         parts = []
-        async for delta in await client.chat_stream(
-            [{"role": "user", "content": "Hi"}]
-        ):
+        async for delta in await client.chat_stream([{"role": "user", "content": "Hi"}]):
             parts.append(delta)
 
         assert parts == ["content"]
@@ -202,17 +201,17 @@ class TestChatStream:
         client = BridgeClient(session, "http://bridge:18780", "tok")
 
         no_content_chunk = json.dumps({"choices": [{"delta": {}}]})
-        sse_resp = MockSSEResponse([
-            f"data: {no_content_chunk}\n",
-            _sse_line("actual"),
-            "data: [DONE]\n",
-        ])
+        sse_resp = MockSSEResponse(
+            [
+                f"data: {no_content_chunk}\n",
+                _sse_line("actual"),
+                "data: [DONE]\n",
+            ]
+        )
         session.request = AsyncMock(return_value=sse_resp)
 
         parts = []
-        async for delta in await client.chat_stream(
-            [{"role": "user", "content": "Hi"}]
-        ):
+        async for delta in await client.chat_stream([{"role": "user", "content": "Hi"}]):
             parts.append(delta)
 
         assert parts == ["actual"]
@@ -222,17 +221,17 @@ class TestChatStream:
         session = MagicMock(spec=aiohttp.ClientSession)
         client = BridgeClient(session, "http://bridge:18780", "tok")
 
-        sse_resp = MockSSEResponse([
-            "data: not json\n",
-            _sse_line("valid"),
-            "data: [DONE]\n",
-        ])
+        sse_resp = MockSSEResponse(
+            [
+                "data: not json\n",
+                _sse_line("valid"),
+                "data: [DONE]\n",
+            ]
+        )
         session.request = AsyncMock(return_value=sse_resp)
 
         parts = []
-        async for delta in await client.chat_stream(
-            [{"role": "user", "content": "Hi"}]
-        ):
+        async for delta in await client.chat_stream([{"role": "user", "content": "Hi"}]):
             parts.append(delta)
 
         assert parts == ["valid"]
@@ -265,7 +264,7 @@ class TestChatStream:
         session = MagicMock(spec=aiohttp.ClientSession)
         client = BridgeClient(session, "http://bridge:18780", "tok")
 
-        session.request = AsyncMock(side_effect=asyncio.TimeoutError())
+        session.request = AsyncMock(side_effect=TimeoutError())
 
         with pytest.raises(BridgeTimeoutError):
             await client.chat_stream([{"role": "user", "content": "Hi"}])
@@ -296,15 +295,15 @@ class TestChatStream:
         session = MagicMock(spec=aiohttp.ClientSession)
         client = BridgeClient(session, "http://bridge:18780", "tok")
 
-        sse_resp = MockSSEResponse([
-            _sse_line("text"),
-            "data: [DONE]\n",
-        ])
+        sse_resp = MockSSEResponse(
+            [
+                _sse_line("text"),
+                "data: [DONE]\n",
+            ]
+        )
         session.request = AsyncMock(return_value=sse_resp)
 
-        async for _ in await client.chat_stream(
-            [{"role": "user", "content": "Hi"}]
-        ):
+        async for _ in await client.chat_stream([{"role": "user", "content": "Hi"}]):
             pass
 
         assert sse_resp._closed
@@ -321,13 +320,12 @@ class TestStreamChat:
             async def gen():
                 yield "Hello"
                 yield " world"
+
             return gen()
 
         client.chat_stream = mock_stream
 
-        result = await _stream_chat(
-            client, [{"role": "user", "content": "Hi"}], agent="cora"
-        )
+        result = await _stream_chat(client, [{"role": "user", "content": "Hi"}], agent="cora")
         assert result == "Hello world"
 
     @pytest.mark.asyncio
@@ -338,11 +336,42 @@ class TestStreamChat:
             async def gen():
                 return
                 yield  # make it an async generator
+
             return gen()
 
         client.chat_stream = mock_stream
 
-        result = await _stream_chat(
-            client, [{"role": "user", "content": "Hi"}]
-        )
+        result = await _stream_chat(client, [{"role": "user", "content": "Hi"}])
         assert result is None
+
+
+class TestToDeltaStream:
+    """US0033: adapt bridge text deltas to HA AssistantContentDeltaDict stream."""
+
+    @pytest.mark.asyncio
+    async def test_role_then_content_chunks(self):
+        async def deltas():
+            for c in ["Hello", " ", "world"]:
+                yield c
+
+        out = [d async for d in _to_delta_stream(deltas())]
+        assert out[0] == {"role": "assistant"}
+        assert out[1:] == [{"content": "Hello"}, {"content": " "}, {"content": "world"}]
+
+    @pytest.mark.asyncio
+    async def test_empty_chunks_skipped(self):
+        async def deltas():
+            for c in ["", "hi", ""]:
+                yield c
+
+        out = [d async for d in _to_delta_stream(deltas())]
+        assert out == [{"role": "assistant"}, {"content": "hi"}]
+
+    @pytest.mark.asyncio
+    async def test_no_chunks_still_yields_role(self):
+        async def deltas():
+            return
+            yield  # make it an async generator
+
+        out = [d async for d in _to_delta_stream(deltas())]
+        assert out == [{"role": "assistant"}]

@@ -7,11 +7,11 @@
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
-| Proposed | 7 |
+| Proposed | 6 |
 | Ready | 0 |
 | Planned | 0 |
 | In Progress | 1 |
-| Review | 2 |
+| Review | 3 |
 | Done | 29 |
 | **Total** | **39** |
 
@@ -88,7 +88,7 @@
 | ID | Title | Status | Points | Owner |
 |----|-------|--------|--------|-------|
 | [US0032](US0032-session-continuity-idle-channel.md) | Session continuity via idle-windowed channel key | Done | 3 | Darren Benson |
-| [US0033](US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | Proposed | 3 | Darren Benson |
+| [US0033](US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | Review | 3 | Darren Benson |
 | [US0034](US0034-richer-grounding-envelope.md) | Richer grounding: recent changes + presence + alarms/calendar | Proposed | 5 | Darren Benson |
 | [US0035](US0035-camera-vision-input.md) | Camera/vision input via image attachments | Proposed | 5 | Darren Benson |
 | [US0036](US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | Proposed | 5 | Darren Benson |
@@ -132,7 +132,7 @@
 | [US0030](US0030-docs-reactive-proactive-boundary.md) | Document reactive/proactive boundary + update README/TRD to v4.36 | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Done | 2 |
 | [US0031](US0031-shared-ha-envelope-audit-fleet-provisioning.md) | Shared HA tool envelope + actuation audit-events + Cora/Eve/Julian provisioning | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | Review | 5 |
 | [US0032](US0032-session-continuity-idle-channel.md) | Session continuity via idle-windowed channel key | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Done | 3 |
-| [US0033](US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 3 |
+| [US0033](US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Review | 3 |
 | [US0034](US0034-richer-grounding-envelope.md) | Richer grounding: recent changes + presence + alarms/calendar | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 5 |
 | [US0035](US0035-camera-vision-input.md) | Camera/vision input via image attachments | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 5 |
 | [US0036](US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 5 |

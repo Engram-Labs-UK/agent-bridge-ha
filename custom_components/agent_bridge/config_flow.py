@@ -32,6 +32,7 @@ from .const import (
     CONF_CREW,
     CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
+    CONF_ENABLE_STREAMING,
     CONF_ENABLE_TOOL_CALLS,
     CONF_PROMPT,
     CONF_SESSION_IDLE_WINDOW,
@@ -41,6 +42,7 @@ from .const import (
     DEFAULT_BRIDGE_URL,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
+    DEFAULT_ENABLE_STREAMING,
     DEFAULT_PROMPT,
     DEFAULT_SESSION_IDLE_WINDOW,
     DEFAULT_THINKING_TIMEOUT,
@@ -358,6 +360,11 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                         CONF_SESSION_IDLE_WINDOW,
                         default=options.get(CONF_SESSION_IDLE_WINDOW, DEFAULT_SESSION_IDLE_WINDOW),
                     ): vol.All(int, vol.Range(min=0, max=86400)),
+                    # US0033: opt-in response streaming to TTS (experimental).
+                    vol.Optional(
+                        CONF_ENABLE_STREAMING,
+                        default=options.get(CONF_ENABLE_STREAMING, DEFAULT_ENABLE_STREAMING),
+                    ): bool,
                     vol.Optional(
                         CONF_SSL_VERIFY,
                         default=options.get(CONF_SSL_VERIFY, True),

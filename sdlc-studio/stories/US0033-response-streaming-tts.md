@@ -1,6 +1,6 @@
 # US0033: Response streaming to TTS (deltas)
 
-> **Status:** Proposed
+> **Status:** Review — component-side done (opt-in, default off); live TTS validation pending
 > **Epic:** [EP0008: Conversation Capability Expansion](../epics/EP0008-conversation-capability-expansion.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-05
@@ -64,3 +64,4 @@ existing SSE transport only (Cora: don't add a transport layer for this).
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-05 | Claude | Initial story for EP0008 (CR-0004), Phase 1b |
+| 2026-06-05 | Claude | Implemented opt-in streaming (`CONF_ENABLE_STREAMING`, default off): `_to_delta_stream` adapts bridge text deltas to HA's `async_add_delta_content_stream`; fallback to non-streaming on any error. Review fix: content-length guard prevents double-append on empty/partial streams. Adapter + fallback unit-tested; streaming integration tests CI-gated. Status → Review (live TTS validation pending) |

@@ -15,6 +15,7 @@ bridge agent and returns the reply. The agent actuates HA itself via its own
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
@@ -47,12 +48,14 @@ from .const import (
     CONF_CONTEXT_STRATEGY,
     CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
+    CONF_ENABLE_STREAMING,
     CONF_PROMPT,
     CONF_SESSION_IDLE_WINDOW,
     DEFAULT_CONTEXT_MAX_CHARS,
     DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_CONTINUATION_EXCLUSIONS,
     DEFAULT_CONTINUATION_PHRASES,
+    DEFAULT_ENABLE_STREAMING,
     DEFAULT_PROMPT,
     DEFAULT_SESSION_IDLE_WINDOW,
     DENY_CONFIRM_DOMAINS,
@@ -424,6 +427,19 @@ async def _stream_chat(
     return "".join(parts) if parts else None
 
 
+async def _to_delta_stream(
+    deltas: AsyncIterator[str],
+) -> AsyncIterator[dict[str, Any]]:
+    """Adapt the bridge's plain-text deltas to HA's ``AssistantContentDeltaDict``
+    stream (US0033): a leading ``{"role": "assistant"}`` then a ``{"content": ...}``
+    per non-empty chunk, as ``ChatLog.async_add_delta_content_stream`` expects.
+    """
+    yield {"role": "assistant"}
+    async for chunk in deltas:
+        if chunk:
+            yield {"content": chunk}
+
+
 def _messages_from_chat_log(chat_log: ChatLog) -> list[dict[str, Any]]:
     """Convert ``ChatLog`` history into bridge chat messages (US0026/AC2).
 
@@ -651,23 +667,53 @@ class AgentBridgeConversationEntity(ConversationEntity):
                 source_type,
             )
 
-        response: dict[str, Any] = {}
-        try:
-            response = await self.client.chat(
-                messages,
-                agent=self._agent_id,
-                channel=session_channel,
-                caller_context=caller_context,
+        # US0033: optionally stream the reply into the ChatLog as deltas (lower TTS
+        # latency). Opt-in; any failure falls back to the proven non-streaming path.
+        text = ""
+        model = ""
+        streamed = False
+        if options.get(CONF_ENABLE_STREAMING, DEFAULT_ENABLE_STREAMING):
+            # Track whether the delta stream appended an assistant turn so the
+            # fallback runs ONLY when streaming added nothing -- never both, which
+            # would double-append (e.g. an empty/partial stream).
+            n_before = len(chat_log.content)
+            try:
+                deltas = await self.client.chat_stream(
+                    messages,
+                    agent=self._agent_id,
+                    channel=session_channel,
+                    caller_context=caller_context,
+                )
+                async for _content in chat_log.async_add_delta_content_stream(
+                    self.entity_id, _to_delta_stream(deltas)
+                ):
+                    pass
+            except Exception as err:  # any stream failure falls back to non-streaming
+                _LOGGER.debug("Streaming failed; falling back to non-streaming: %s", err)
+            if len(chat_log.content) > n_before:
+                # The stream appended an assistant turn (complete or partial);
+                # use it and skip the fallback to avoid a duplicate turn.
+                last = chat_log.content[-1]
+                text = getattr(last, "content", "") or ""
+                streamed = True
+
+        if not streamed:
+            response: dict[str, Any] = {}
+            try:
+                response = await self.client.chat(
+                    messages,
+                    agent=self._agent_id,
+                    channel=session_channel,
+                    caller_context=caller_context,
+                )
+                text = extract_response_text(response) or ""
+            except BridgeError as err:
+                text = ERROR_MESSAGES.get(err.code, str(err))
+
+            chat_log.async_add_assistant_content_without_tools(
+                AssistantContent(agent_id=self.entity_id, content=text)
             )
-            text = extract_response_text(response) or ""
-        except BridgeError as err:
-            text = ERROR_MESSAGES.get(err.code, str(err))
-
-        chat_log.async_add_assistant_content_without_tools(
-            AssistantContent(agent_id=self.entity_id, content=text)
-        )
-
-        model = response.get("model", "") if isinstance(response, dict) else ""
+            model = response.get("model", "") if isinstance(response, dict) else ""
         self.hass.bus.async_fire(
             EVENT_MESSAGE_RECEIVED,
             {

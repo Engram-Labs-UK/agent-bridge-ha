@@ -43,7 +43,7 @@ building it (we did: the bridge already persists session by channel, 24h TTL).
 | ID | Title | Status | Depends on | Phase | Target |
 |----|-------|--------|-----------|-------|--------|
 | [US0032](../stories/US0032-session-continuity-idle-channel.md) | Session continuity via idle-windowed channel key | Done | none | P1 | 0.5.0 |
-| [US0033](../stories/US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | Proposed | US0032 | P1 | 0.6.0 |
+| [US0033](../stories/US0033-response-streaming-tts.md) | Response streaming to TTS (deltas) | Review | US0032 | P1 | 0.6.0 |
 | [US0034](../stories/US0034-richer-grounding-envelope.md) | Richer grounding: recent changes + presence + alarms/calendar | Proposed | none | P1 | 0.6.0 |
 | [US0035](../stories/US0035-camera-vision-input.md) | Camera/vision input via image attachments | Proposed | none | P2 | 0.7.0 |
 | [US0036](../stories/US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | Proposed | US0032 | P2 | 0.7.0 |

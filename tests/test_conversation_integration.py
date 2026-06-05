@@ -299,6 +299,66 @@ class TestHandleMessage:
         assert first == second  # within the idle window -> same session
 
 
+class TestStreaming:
+    """US0033: opt-in response streaming into the ChatLog, with fallback."""
+
+    @staticmethod
+    def _streaming_entity(client, hass):
+        from custom_components.agent_bridge.const import CONF_ENABLE_STREAMING
+
+        entity = _make_entity(client, hass)
+        entity.entry.options = {CONF_ENABLE_STREAMING: True}
+        return entity
+
+    @pytest.mark.asyncio
+    async def test_streaming_appends_single_assistant_turn(self, hass):
+        client = MagicMock()
+
+        async def fake_stream(*args, **kwargs):
+            async def gen():
+                for chunk in ["Hi", " there"]:
+                    yield chunk
+
+            return gen()
+
+        client.chat_stream = fake_stream
+        client.chat = AsyncMock(return_value=CHAT_SUCCESS)
+        entity = self._streaming_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        p1, p2 = _patch_grounding()
+        with p1, p2:
+            result = await entity._async_handle_message(_conversation_input(), chat_log)
+
+        # Exactly one assistant turn, assembled from the deltas; no fallback call.
+        assistant = [c for c in chat_log.content if c.role == "assistant"]
+        assert len(assistant) == 1
+        assert assistant[0].content == "Hi there"
+        client.chat.assert_not_called()
+        assert result.response.speech["plain"]["speech"] == "Hi there"
+
+    @pytest.mark.asyncio
+    async def test_streaming_error_falls_back_once(self, hass):
+        client = MagicMock()
+
+        async def boom(*args, **kwargs):
+            raise BridgeError("CONNECTION_ERROR", "boom")
+
+        client.chat_stream = boom
+        client.chat = AsyncMock(return_value=CHAT_SUCCESS)
+        entity = self._streaming_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        p1, p2 = _patch_grounding()
+        with p1, p2:
+            await entity._async_handle_message(_conversation_input(), chat_log)
+
+        # Stream added nothing -> exactly one assistant turn from the fallback.
+        assistant = [c for c in chat_log.content if c.role == "assistant"]
+        assert len(assistant) == 1
+        client.chat.assert_called_once()
+
+
 class TestActuationSafetyAndAudit:
     """US0027: deny/confirm caution (R3) + actuation audit hook (AC3)."""
 
