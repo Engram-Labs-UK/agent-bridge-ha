@@ -45,7 +45,10 @@ jobs:
         # EP0008: the vision (camera) + AI Task tests import
         # homeassistant.components.camera, whose PyTurboJPEG requirement loads
         # the libturbojpeg shared library via ctypes at import time.
-        run: sudo apt-get update && sudo apt-get install -y libturbojpeg0
+        run: |
+          sudo apt-get update
+          # Package is `libturbojpeg` on Ubuntu 24.04 (noble), `libturbojpeg0` on older.
+          sudo apt-get install -y libturbojpeg || sudo apt-get install -y libturbojpeg0
 
       - name: Install dependencies (pinned HA core)
         run: |
