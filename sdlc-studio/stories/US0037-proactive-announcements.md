@@ -1,6 +1,6 @@
 # US0037: Proactive announcements to satellites (HA-as-client)
 
-> **Status:** Proposed
+> **Status:** Done — delivered via the agent's `/api/mcp` mount (no new HA listener)
 > **Epic:** [EP0008: Conversation Capability Expansion](../epics/EP0008-conversation-capability-expansion.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-05
@@ -62,3 +62,4 @@ sleeping rooms), and a way to know which satellites are currently active.
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-05 | Claude | Initial story for EP0008 (CR-0004), Phase 4 |
+| 2026-06-05 | Claude | Implemented `agent_bridge.announce` (target satellite, priority, skip-unavailable-unless-critical) + services.yaml. **Approach refinement vs AC2:** no new HA inbound webhook listener is needed — with Option A the agent already actuates HA via its own `/api/mcp` mount, so it calls this service directly to push speech. This is simpler and avoids a co-requisite bridge convention. "Don't wake sleeping rooms" = skip-if-unavailable for now (DND modelling deferred). Unit-tested. Status → Done |

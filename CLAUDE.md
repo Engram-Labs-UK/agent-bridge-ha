@@ -68,7 +68,11 @@ Check TRD before implementing -- it has interface definitions, API contracts, an
 
 ## Current State
 
-Brownfield, **0.7.0** released. 0.7.0 (EP0008 Phase 2+3) adds **camera/vision input**
+Brownfield, **0.8.0** released. 0.8.0 (EP0008 Phase 4, US0037) adds **proactive announcements**:
+the `agent_bridge.announce` service speaks a message on a chosen `assist_satellite` with a
+priority (low/normal skip an unavailable satellite; critical always attempts). With Option A the
+agent triggers it via its own `/api/mcp` mount — no new HA listener. 0.7.0 (EP0008 Phase 2+3)
+adds **camera/vision input**
 (`agent_bridge.ask_with_image` sends a camera snapshot as an image attachment, US0035) and
 **confirm-before-actuate** (US0036): the agent prefixes a safety confirmation with
 `[confirm:LEVEL]`, which HA strips from speech, surfaces as `severity`/`awaiting_confirmation`
@@ -113,4 +117,4 @@ See `sdlc-studio/IMPLEMENTATION-KICKOFF.md` and the EP0007 epic.
 
 ---
 
-*Version: 0.7.0 -- 2026-06-05 (EP0008 Phase 2+3 / US0035 vision + US0036 confirm-before-actuate; EP0007 operator live-E2E + fleet provisioning still pending)*
+*Version: 0.8.0 -- 2026-06-05 (EP0008 Phase 4 / US0037 proactive announcements; EP0007 operator live-E2E + fleet provisioning still pending)*

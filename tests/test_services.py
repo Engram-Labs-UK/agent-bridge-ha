@@ -10,6 +10,7 @@ from custom_components.agent_bridge.const import DOMAIN
 from custom_components.agent_bridge.services import (
     _get_entry_data,
     _validate_agent_id,
+    async_handle_announce,
     async_handle_ask_with_image,
     async_handle_invoke_tool,
     async_handle_send_message,
@@ -108,6 +109,55 @@ class TestAskWithImage:
 
         assert result["response"] == ""
         assert "Could not capture" in result["error"]
+
+
+class TestAnnounce:
+    @pytest.mark.asyncio
+    async def test_announces_to_available_satellite(self, mock_hass):
+        mock_hass.states.get.return_value = MagicMock(state="idle")
+        mock_hass.services.async_call = AsyncMock()
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"message": "Washing done", "target": "assist_satellite.kitchen"}
+
+        result = await async_handle_announce(call)
+        assert result["announced"] is True
+        mock_hass.services.async_call.assert_awaited_once()
+        args = mock_hass.services.async_call.await_args.args
+        assert args[0] == "assist_satellite" and args[1] == "announce"
+
+    @pytest.mark.asyncio
+    async def test_skips_unavailable_when_not_critical(self, mock_hass):
+        mock_hass.states.get.return_value = MagicMock(state="unavailable")
+        mock_hass.services.async_call = AsyncMock()
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {
+            "message": "Bin day",
+            "target": "assist_satellite.bedroom",
+            "priority": "low",
+        }
+
+        result = await async_handle_announce(call)
+        assert result["announced"] is False
+        assert "unavailable" in result["reason"]
+        mock_hass.services.async_call.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_critical_announces_even_if_unavailable(self, mock_hass):
+        mock_hass.states.get.return_value = MagicMock(state="unavailable")
+        mock_hass.services.async_call = AsyncMock()
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {
+            "message": "Smoke detected",
+            "target": "assist_satellite.hall",
+            "priority": "critical",
+        }
+
+        result = await async_handle_announce(call)
+        assert result["announced"] is True
+        mock_hass.services.async_call.assert_awaited_once()
 
 
 class TestValidateAgentId:

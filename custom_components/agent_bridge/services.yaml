@@ -98,3 +98,34 @@ ask_with_image:
       required: false
       selector:
         text:
+
+announce:
+  name: Announce
+  description: Proactively speak a message on a satellite (skips unavailable ones unless critical).
+  fields:
+    message:
+      name: Message
+      description: The message to speak.
+      required: true
+      example: "The washing machine has finished."
+      selector:
+        text:
+    target:
+      name: Satellite
+      description: The assist_satellite entity to announce on.
+      required: true
+      example: "assist_satellite.kitchen"
+      selector:
+        entity:
+          domain: assist_satellite
+    priority:
+      name: Priority
+      description: low/normal skip an unavailable satellite; critical always attempts.
+      required: false
+      default: normal
+      selector:
+        select:
+          options:
+            - low
+            - normal
+            - critical

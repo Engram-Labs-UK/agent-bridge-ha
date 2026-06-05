@@ -27,6 +27,7 @@ SERVICE_SEND_MESSAGE = "send_message"
 SERVICE_INVOKE_TOOL = "invoke_tool"
 SERVICE_BROADCAST = "broadcast"
 SERVICE_ASK_WITH_IMAGE = "ask_with_image"
+SERVICE_ANNOUNCE = "announce"
 
 SEND_MESSAGE_SCHEMA = vol.Schema(
     {
@@ -57,6 +58,14 @@ ASK_WITH_IMAGE_SCHEMA = vol.Schema(
         vol.Required("camera_entity_id"): cv.entity_id,
         vol.Optional("agent_id"): cv.string,
         vol.Optional("session_id"): cv.string,
+    }
+)
+
+ANNOUNCE_SCHEMA = vol.Schema(
+    {
+        vol.Required("message"): cv.string,
+        vol.Required("target"): cv.entity_id,
+        vol.Optional("priority", default="normal"): vol.In(["low", "normal", "critical"]),
     }
 )
 
@@ -194,6 +203,41 @@ async def async_handle_ask_with_image(call: ServiceCall) -> ServiceResponse:
         return {"response": "", "error": str(err)}
 
 
+async def async_handle_announce(call: ServiceCall) -> ServiceResponse:
+    """Proactively speak a message on a satellite (US0037).
+
+    With Option A the agent actuates HA via its own ``/api/mcp`` mount, so it can
+    call this service directly to push speech -- no separate HA-side listener is
+    needed. Adds Cora's asks: a specific ``assist_satellite`` target, priority,
+    and skipping a satellite that is unavailable (don't announce into the void)
+    unless the message is ``critical``.
+    """
+    hass = call.hass
+    message = call.data["message"]
+    target = call.data["target"]
+    priority = call.data.get("priority", "normal")
+
+    state = hass.states.get(target)
+    available = state is not None and state.state not in ("unavailable", "unknown")
+    if not available and priority != "critical":
+        return {
+            "announced": False,
+            "target": target,
+            "reason": f"{target} is unavailable; skipped (priority={priority})",
+        }
+
+    try:
+        await hass.services.async_call(
+            "assist_satellite",
+            "announce",
+            {"entity_id": target, "message": message},
+            blocking=True,
+        )
+    except (HomeAssistantError, vol.Invalid) as err:
+        return {"announced": False, "target": target, "error": str(err)}
+    return {"announced": True, "target": target, "priority": priority}
+
+
 def _normalise_broadcast_responses(raw: Any) -> list[dict[str, Any]]:
     """Normalise the v4.36 broadcast ``responses`` object into a list.
 
@@ -269,6 +313,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
 
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ANNOUNCE,
+        async_handle_announce,
+        schema=ANNOUNCE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
 
 async def async_unload_services(hass: HomeAssistant) -> None:
     """Unregister Agent Bridge services."""
@@ -276,3 +328,4 @@ async def async_unload_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, SERVICE_INVOKE_TOOL)
     hass.services.async_remove(DOMAIN, SERVICE_BROADCAST)
     hass.services.async_remove(DOMAIN, SERVICE_ASK_WITH_IMAGE)
+    hass.services.async_remove(DOMAIN, SERVICE_ANNOUNCE)
