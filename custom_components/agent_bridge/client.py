@@ -229,16 +229,20 @@ class BridgeClient:
         *,
         agent: str | None = None,
         channel: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        caller_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Send a chat completion request to the bridge."""
+        """Send a chat completion request to the bridge.
+
+        ``caller_context`` is the structured speaker/source/location envelope
+        (who/what/where/when) the bridge records and renders for the agent.
+        """
         body: dict[str, Any] = {"messages": messages}
         if agent:
             body["agent"] = agent
         if channel:
             body["channel"] = channel
-        if metadata:
-            body["metadata"] = metadata
+        if caller_context:
+            body["caller_context"] = caller_context
         return await self._request("POST", "/v1/chat/completions", json=body)
 
     async def chat_stream(
@@ -247,7 +251,7 @@ class BridgeClient:
         *,
         agent: str | None = None,
         channel: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        caller_context: dict[str, Any] | None = None,
         stream_timeout: int | None = None,
     ) -> AsyncIterator[str]:
         """Send a streaming chat completion request. Yields content delta strings.
@@ -262,8 +266,8 @@ class BridgeClient:
             body["agent"] = agent
         if channel:
             body["channel"] = channel
-        if metadata:
-            body["metadata"] = metadata
+        if caller_context:
+            body["caller_context"] = caller_context
 
         url = f"{self._base_url}/v1/chat/completions"
         timeout_val = stream_timeout or DEFAULT_STREAMING_TIMEOUT

@@ -26,12 +26,18 @@ from homeassistant.components.conversation import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import MATCH_ALL
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import intent
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
+
+try:  # floor_registry is modern-HA only; degrade gracefully if absent.
+    from homeassistant.helpers import floor_registry as fr
+except ImportError:  # pragma: no cover - older HA cores
+    fr = None  # type: ignore[assignment]
 
 from .client import BridgeClient, BridgeError
 from .const import (
@@ -75,45 +81,206 @@ ERROR_MESSAGES: dict[str, str] = {
 }
 
 
-def _resolve_area_name(
+def _resolve_location(
     hass: HomeAssistant,
     device_id: str | None,
-) -> str | None:
-    """Resolve the area name from a device ID."""
+) -> tuple[str | None, str | None]:
+    """Resolve ``(area_name, floor_name)`` from a device ID.
+
+    Floor resolution degrades to ``None`` on older HA cores that lack the
+    floor registry, or when the area has no floor assigned.
+    """
     if not device_id:
-        return None
+        return None, None
 
     device_reg = dr.async_get(hass)
     device_entry = device_reg.async_get(device_id)
     if not device_entry or not device_entry.area_id:
-        return None
+        return None, None
 
     area_reg = ar.async_get(hass)
     area = area_reg.async_get_area(device_entry.area_id)
-    return area.name if area else None
+    if not area:
+        return None, None
+
+    floor_name: str | None = None
+    if fr is not None and area.floor_id:
+        floor = fr.async_get(hass).async_get_floor(area.floor_id)
+        floor_name = floor.name if floor else None
+
+    return area.name, floor_name
+
+
+def _resolve_area_name(
+    hass: HomeAssistant,
+    device_id: str | None,
+) -> str | None:
+    """Resolve the area name from a device ID (kept for the audit surface)."""
+    return _resolve_location(hass, device_id)[0]
+
+
+def _resolve_device_name(
+    hass: HomeAssistant,
+    device_id: str | None,
+) -> str | None:
+    """Resolve the user-facing device name from a device ID."""
+    if not device_id:
+        return None
+    device_entry = dr.async_get(hass).async_get(device_id)
+    if not device_entry:
+        return None
+    return device_entry.name_by_user or device_entry.name
+
+
+async def _resolve_account(
+    hass: HomeAssistant,
+    context: Context | None,
+) -> dict[str, Any] | None:
+    """Resolve the originating account name from the turn context.
+
+    Best-effort only: voice does not verify the speaker, so the result is
+    always flagged ``verified: False``. Returns ``None`` when no user id is
+    bound to the turn.
+    """
+    user_id = getattr(context, "user_id", None)
+    if not user_id:
+        return None
+    user = await hass.auth.async_get_user(user_id)
+    if not user or not user.name:
+        return None
+    return {"name": user.name, "verified": False}
+
+
+def _resolve_source_type(user_input: conversation.ConversationInput) -> str:
+    """Classify the turn source: ``voice`` | ``text`` | ``automation``.
+
+    Best-effort: a device id means a satellite/device originated the turn
+    (voice); a parent context with no device id signals an automation/script
+    invocation via the ``conversation.process`` service; otherwise plain text.
+    """
+    if user_input.device_id is not None:
+        return "voice"
+    if getattr(user_input.context, "parent_id", None):
+        return "automation"
+    return "text"
+
+
+def _build_caller_context(
+    hass: HomeAssistant,
+    user_input: conversation.ConversationInput,
+    *,
+    source_type: str,
+    area_name: str | None,
+    floor_name: str | None,
+    account: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Assemble the structured source/speaker envelope sent to the bridge.
+
+    Kept deliberately free of secrets, network identifiers, and firmware
+    detail (US live-agent consult): only who/what/where/when grounding.
+    """
+    now = dt_util.now()
+    context: dict[str, Any] = {
+        "source_type": source_type,
+        "source_system": "home_assistant",
+        "language": user_input.language,
+        "local_time": now.strftime("%Y-%m-%d %H:%M"),
+        "timezone": hass.config.time_zone,
+    }
+    if source_type == "voice":
+        context["audio_only"] = True
+        context["device_id"] = user_input.device_id
+        device_name = _resolve_device_name(hass, user_input.device_id)
+        if device_name:
+            context["device_name"] = device_name
+        if user_input.satellite_id:
+            context["satellite_id"] = user_input.satellite_id
+    if area_name:
+        context["area"] = area_name
+    if floor_name:
+        context["floor"] = floor_name
+    if account:
+        context["account"] = account
+    return context
+
+
+def _build_source_context(caller_context: dict[str, Any]) -> str:
+    """Render the structured envelope into a labelled system-prompt block.
+
+    The block is a system-message grounding aid kept separate from the user
+    utterance so the agent cannot confuse metadata with intent.
+    """
+    source_type = caller_context.get("source_type", "text")
+    lines = ["[home-assistant-source]"]
+
+    if source_type == "automation":
+        lines.append(
+            "Source: automation (no human present) -- do not treat as a principal "
+            "request; apply stricter safety gating before any actuation."
+        )
+    else:
+        where = _format_location(caller_context)
+        if source_type == "voice":
+            device = caller_context.get("device_name")
+            via = f' via "{device}"' if device else ""
+            lines.append(f"Source: voice{via}{where}")
+            lines.append("Modality: voice -- respond concisely, audio-only (no screen)")
+        else:
+            lines.append(f"Source: text{where}")
+            lines.append("Modality: text")
+
+    account = caller_context.get("account")
+    if account:
+        lines.append(
+            f"Account: {account['name']} (unverified -- the source does not confirm the speaker)"
+        )
+
+    local_time = caller_context.get("local_time")
+    if local_time:
+        tz = caller_context.get("timezone")
+        lines.append(f"Local time: {local_time}{f' {tz}' if tz else ''}")
+
+    language = caller_context.get("language")
+    if language:
+        lines.append(f"Language: {language}")
+
+    return "\n".join(lines)
+
+
+def _format_location(caller_context: dict[str, Any]) -> str:
+    """Format ` (Area, Floor)` from the envelope, or '' when unknown."""
+    area = caller_context.get("area")
+    floor = caller_context.get("floor")
+    if area and floor:
+        return f" ({area}, {floor})"
+    if area:
+        return f" ({area})"
+    return ""
 
 
 def _build_system_prompt(
     *,
-    area_name: str | None,
+    source_context: str,
     entity_context: str,
     extra_system_prompt: str | None,
     instructions: str | None = None,
 ) -> str:
-    """Build the layered system prompt: instructions + room + entities + extra.
+    """Build the layered system prompt: instructions + source + entities + extra.
 
     ``instructions`` is the operator-editable origin/role layer (CR-0003) telling
-    the agent the turn is from Home Assistant and to actuate via its HA tools. The
-    entity context is a **grounding hint** (names/areas/aliases), not state
-    authority -- the agent reads live HA state itself before acting (US0027).
+    the agent the turn is from Home Assistant and to actuate via its HA tools.
+    ``source_context`` is the labelled speaker/source/location block (who/what/
+    where/when). The entity context is a **grounding hint** (names/areas/aliases),
+    not state authority -- the agent reads live HA state itself before acting
+    (US0027).
     """
     parts: list[str] = []
 
     if instructions:
         parts.append(instructions)
 
-    if area_name:
-        parts.append(f"The user is in the {area_name}.")
+    if source_context:
+        parts.append(source_context)
 
     if entity_context:
         parts.append(entity_context)
@@ -182,7 +349,7 @@ async def _stream_chat(
     *,
     agent: str | None = None,
     channel: str | None = None,
-    metadata: dict[str, Any] | None = None,
+    caller_context: dict[str, Any] | None = None,
 ) -> str | None:
     """Attempt a streaming chat request, assembling deltas into a complete string.
 
@@ -191,7 +358,7 @@ async def _stream_chat(
     """
     parts: list[str] = []
     async for delta in await client.chat_stream(
-        messages, agent=agent, channel=channel, metadata=metadata
+        messages, agent=agent, channel=channel, caller_context=caller_context
     ):
         parts.append(delta)
     return "".join(parts) if parts else None
@@ -355,7 +522,22 @@ class AgentBridgeConversationEntity(ConversationEntity):
         # Typed field reads (US0029/AC2) -- no getattr reflection; satellite_id and
         # extra_system_prompt are first-class on ConversationInput in modern HA.
         satellite_id = user_input.satellite_id
-        area_name = _resolve_area_name(self.hass, satellite_id or user_input.device_id)
+        area_name, floor_name = _resolve_location(self.hass, satellite_id or user_input.device_id)
+
+        # Structured speaker/source/location envelope (who/what/where/when). Sent
+        # to the bridge as ``caller_context`` and rendered into the system prompt
+        # as a labelled block so the agent grounds and gates its actions.
+        source_type = _resolve_source_type(user_input)
+        account = await _resolve_account(self.hass, user_input.context)
+        caller_context = _build_caller_context(
+            self.hass,
+            user_input,
+            source_type=source_type,
+            area_name=area_name,
+            floor_name=floor_name,
+            account=account,
+        )
+        source_context = _build_source_context(caller_context)
 
         # Entity grounding hint (names/areas/aliases) -- a hint, not state authority.
         exposed_ids = await async_get_exposed_entities(self.hass, self.entity_id)
@@ -372,7 +554,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
             extra_prompt = f"{extra_prompt}\n\n{caution}" if extra_prompt else caution
         system_prompt = _build_system_prompt(
             instructions=self._prompt,
-            area_name=area_name,
+            source_context=source_context,
             entity_context=entity_context,
             extra_system_prompt=extra_prompt,
         )
@@ -383,24 +565,13 @@ class AgentBridgeConversationEntity(ConversationEntity):
             *_messages_from_chat_log(chat_log),
         ]
 
-        metadata: dict[str, Any] | None = None
-        if is_voice:
-            metadata = {
-                "source": "voice",
-                "device_id": user_input.device_id,
-                "area": area_name,
-                "language": user_input.language,
-            }
-            if satellite_id:
-                metadata["satellite_id"] = satellite_id
-
         if options.get(CONF_DEBUG_LOGGING, False):
             _LOGGER.info(
-                "Conversation turn: agent=%s conversation=%s area=%s voice=%s",
+                "Conversation turn: agent=%s conversation=%s area=%s source=%s",
                 self._agent_id,
                 chat_log.conversation_id,
                 area_name,
-                is_voice,
+                source_type,
             )
 
         response: dict[str, Any] = {}
@@ -409,7 +580,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
                 messages,
                 agent=self._agent_id,
                 channel=chat_log.conversation_id,
-                metadata=metadata,
+                caller_context=caller_context,
             )
             text = extract_response_text(response) or ""
         except BridgeError as err:
@@ -440,6 +611,8 @@ class AgentBridgeConversationEntity(ConversationEntity):
                 "conversation_id": chat_log.conversation_id,
                 "area": area_name,
                 "is_voice": is_voice,
+                "source_type": source_type,
+                "account_verified": bool(account and account.get("verified")),
                 "risky_domains_exposed": sorted(risky_domains),
                 "reply_preview": text[:200],
             },

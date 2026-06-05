@@ -4,65 +4,115 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from custom_components.agent_bridge.conversation import (
+    _build_source_context,
     _build_system_prompt,
     _detect_continuation,
     _resolve_area_name,
+    _resolve_source_type,
 )
 
 
 class TestBuildSystemPrompt:
-
     def test_all_three_layers(self):
         result = _build_system_prompt(
-            area_name="Kitchen",
+            source_context="[home-assistant-source]\nSource: voice (Kitchen)",
             entity_context="light.kitchen: on",
             extra_system_prompt="Be concise.",
         )
-        assert "The user is in the Kitchen." in result
+        assert "[home-assistant-source]" in result
         assert "light.kitchen: on" in result
         assert "Be concise." in result
 
-    def test_room_before_entities(self):
+    def test_source_before_entities(self):
         result = _build_system_prompt(
-            area_name="Kitchen",
+            source_context="[home-assistant-source]\nSource: voice (Kitchen)",
             entity_context="entities here",
             extra_system_prompt=None,
         )
-        idx_room = result.index("Kitchen")
+        idx_source = result.index("home-assistant-source")
         idx_entities = result.index("entities here")
-        assert idx_room < idx_entities
+        assert idx_source < idx_entities
 
-    def test_no_area(self):
+    def test_no_source(self):
         result = _build_system_prompt(
-            area_name=None,
+            source_context="",
             entity_context="entities",
             extra_system_prompt=None,
         )
-        assert "The user is in" not in result
+        assert "home-assistant-source" not in result
         assert "entities" in result
 
     def test_no_entity_context(self):
         result = _build_system_prompt(
-            area_name="Kitchen",
+            source_context="[home-assistant-source]\nSource: voice",
             entity_context="",
             extra_system_prompt=None,
         )
-        assert "The user is in the Kitchen." in result
+        assert "[home-assistant-source]" in result
 
     def test_all_empty(self):
         result = _build_system_prompt(
-            area_name=None,
+            source_context="",
             entity_context="",
             extra_system_prompt=None,
         )
         assert result == ""
 
 
-class TestDetectContinuation:
+class TestBuildSourceContext:
+    def test_voice_block(self):
+        result = _build_source_context(
+            {
+                "source_type": "voice",
+                "device_name": "Kitchen Display",
+                "area": "Kitchen",
+                "floor": "Ground Floor",
+                "language": "en",
+                "local_time": "2026-06-05 14:32",
+                "timezone": "Europe/London",
+                "account": {"name": "Darren", "verified": False},
+            }
+        )
+        assert result.startswith("[home-assistant-source]")
+        assert 'Source: voice via "Kitchen Display" (Kitchen, Ground Floor)' in result
+        assert "audio-only" in result
+        assert "Darren (unverified" in result
+        assert "Local time: 2026-06-05 14:32 Europe/London" in result
+        assert "Language: en" in result
 
+    def test_text_block_has_no_audio_only(self):
+        result = _build_source_context({"source_type": "text", "area": "Study", "language": "en"})
+        assert "Source: text (Study)" in result
+        assert "Modality: text" in result
+        assert "audio-only" not in result
+
+    def test_automation_is_non_principal(self):
+        result = _build_source_context({"source_type": "automation"})
+        assert "automation (no human present)" in result
+        assert "do not treat as a principal request" in result
+
+    def test_area_only_when_no_floor(self):
+        result = _build_source_context({"source_type": "voice", "area": "Hall"})
+        assert "(Hall)" in result
+        assert ", " not in result.split("Source: voice", 1)[1].split("\n", 1)[0]
+
+
+class TestResolveSourceType:
+    def test_voice_when_device_present(self):
+        ui = MagicMock(device_id="d1")
+        assert _resolve_source_type(ui) == "voice"
+
+    def test_automation_when_parent_context_no_device(self):
+        ui = MagicMock(device_id=None, context=MagicMock(parent_id="p1"))
+        assert _resolve_source_type(ui) == "automation"
+
+    def test_text_otherwise(self):
+        ui = MagicMock(device_id=None, context=MagicMock(parent_id=None))
+        assert _resolve_source_type(ui) == "text"
+
+
+class TestDetectContinuation:
     def test_question_with_continuation_phrase(self):
         assert _detect_continuation("Would you like me to turn on all the lights?") is True
 
@@ -99,7 +149,6 @@ class TestDetectContinuation:
 
 
 class TestResolveAreaName:
-
     def test_resolves_area(self):
         hass = MagicMock()
         device_reg = MagicMock()
@@ -112,12 +161,15 @@ class TestResolveAreaName:
         area.name = "Kitchen"
         area_reg.async_get_area.return_value = area
 
-        with __import__("unittest.mock", fromlist=["patch"]).patch(
-            "custom_components.agent_bridge.conversation.dr.async_get",
-            return_value=device_reg,
-        ), __import__("unittest.mock", fromlist=["patch"]).patch(
-            "custom_components.agent_bridge.conversation.ar.async_get",
-            return_value=area_reg,
+        with (
+            __import__("unittest.mock", fromlist=["patch"]).patch(
+                "custom_components.agent_bridge.conversation.dr.async_get",
+                return_value=device_reg,
+            ),
+            __import__("unittest.mock", fromlist=["patch"]).patch(
+                "custom_components.agent_bridge.conversation.ar.async_get",
+                return_value=area_reg,
+            ),
         ):
             result = _resolve_area_name(hass, "device_123")
         assert result == "Kitchen"

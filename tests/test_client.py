@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
@@ -21,9 +21,7 @@ from custom_components.agent_bridge.client import (
 def client():
     """Create a BridgeClient with a mocked session."""
     session = MagicMock(spec=aiohttp.ClientSession)
-    return BridgeClient(
-        session, "http://bridge:18780", "test-token", timeout=10, ssl_verify=True
-    )
+    return BridgeClient(session, "http://bridge:18780", "test-token", timeout=10, ssl_verify=True)
 
 
 @pytest.fixture
@@ -44,7 +42,6 @@ def mock_response():
 
 
 class TestBridgeClientInit:
-
     def test_url_trailing_slash_stripped(self):
         session = MagicMock()
         c = BridgeClient(session, "http://bridge:18780/", "tok")
@@ -67,7 +64,6 @@ class TestBridgeClientInit:
 
 
 class TestCheckAlive:
-
     @pytest.mark.asyncio
     async def test_returns_true_on_success(self, client, mock_response):
         resp = mock_response(json_data={"status": "ok"})
@@ -82,7 +78,6 @@ class TestCheckAlive:
 
 
 class TestHealth:
-
     @pytest.mark.asyncio
     async def test_shallow_health(self, client, mock_response):
         health_data = {"status": "ok", "agents": {"total": 3, "healthy": 3}}
@@ -101,7 +96,6 @@ class TestHealth:
 
 
 class TestDiscover:
-
     @pytest.mark.asyncio
     async def test_returns_agent_list(self, client, mock_response):
         agents = [{"id": "cora", "name": "Cora"}]
@@ -127,7 +121,6 @@ class TestDiscover:
 
 
 class TestChat:
-
     @pytest.mark.asyncio
     async def test_sends_messages(self, client, mock_response):
         chat_data = {
@@ -142,13 +135,12 @@ class TestChat:
             [{"role": "user", "content": "Hi"}],
             agent="cora",
             channel="session-1",
-            metadata={"source": "voice"},
+            caller_context={"source_type": "voice"},
         )
         assert result["agent"] == "cora"
 
 
 class TestInvokeTool:
-
     @pytest.mark.asyncio
     async def test_invoke_tool(self, client, mock_response):
         resp = mock_response(json_data={"result": "ok"})
@@ -169,7 +161,6 @@ class TestInvokeTool:
 
 
 class TestBroadcast:
-
     @pytest.mark.asyncio
     async def test_broadcast_body_shape_and_default_tags(self, client, mock_response):
         """US0022/G5: body is {messages:[{role,content}], tags} with non-empty tags."""
@@ -193,7 +184,6 @@ class TestBroadcast:
 
 
 class TestErrorHandling:
-
     @pytest.mark.asyncio
     async def test_401_raises_auth_error(self, client, mock_response):
         resp = mock_response(status=401)
@@ -249,19 +239,14 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_timeout_raises_timeout_error(self, client):
-        import asyncio
 
-        client._session.request = MagicMock(
-            side_effect=asyncio.TimeoutError()
-        )
+        client._session.request = MagicMock(side_effect=TimeoutError())
         with pytest.raises(BridgeTimeoutError):
             await client.health()
 
     @pytest.mark.asyncio
     async def test_connection_error_raises(self, client):
-        client._session.request = MagicMock(
-            side_effect=aiohttp.ClientError("refused")
-        )
+        client._session.request = MagicMock(side_effect=aiohttp.ClientError("refused"))
         with pytest.raises(BridgeConnectionError):
             await client.health()
 
@@ -284,7 +269,6 @@ class TestErrorHandling:
 
 
 class TestExceptionClasses:
-
     def test_bridge_error(self):
         err = BridgeError("CODE", "message")
         assert err.code == "CODE"

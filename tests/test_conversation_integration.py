@@ -20,17 +20,17 @@ from homeassistant.components.conversation import (
 from homeassistant.core import Context
 
 from custom_components.agent_bridge.client import BridgeError
-from custom_components.agent_bridge.conversation import (
-    ERROR_MESSAGES,
-    AgentBridgeConversationEntity,
-    async_setup_entry,
-)
 from custom_components.agent_bridge.const import (
     CONF_AGENT_ID,
     CONF_DEFAULT_AGENT,
     DOMAIN,
     EVENT_MESSAGE_RECEIVED,
     SUBENTRY_TYPE_CONVERSATION,
+)
+from custom_components.agent_bridge.conversation import (
+    ERROR_MESSAGES,
+    AgentBridgeConversationEntity,
+    async_setup_entry,
 )
 
 from .conftest import CHAT_QUESTION_RESPONSE, CHAT_SUCCESS
@@ -61,9 +61,7 @@ def _make_entity(client: MagicMock, hass) -> AgentBridgeConversationEntity:
     entry.entry_id = "entry_1"
     entry.options = {}
     entry.data = {CONF_DEFAULT_AGENT: "cora"}
-    entity = AgentBridgeConversationEntity(
-        entry, client, agent_id="cora", agent_name="Cora"
-    )
+    entity = AgentBridgeConversationEntity(entry, client, agent_id="cora", agent_name="Cora")
     entity.hass = hass
     entity.entity_id = "conversation.agent_bridge_cora"
     return entity
@@ -142,9 +140,7 @@ class TestHandleMessage:
 
         p1, p2 = _patch_grounding()
         with p1, p2:
-            result = await entity._async_handle_message(
-                _conversation_input(), chat_log
-            )
+            result = await entity._async_handle_message(_conversation_input(), chat_log)
 
         # AC1: user + assistant content appended to the ChatLog.
         roles = [c.role for c in chat_log.content]
@@ -152,9 +148,7 @@ class TestHandleMessage:
         assistant = next(c for c in chat_log.content if c.role == "assistant")
         assert assistant.content == "I've turned on the kitchen lights."
         assert isinstance(result, conversation.ConversationResult)
-        assert result.response.speech["plain"]["speech"] == (
-            "I've turned on the kitchen lights."
-        )
+        assert result.response.speech["plain"]["speech"] == ("I've turned on the kitchen lights.")
 
     @pytest.mark.asyncio
     async def test_forwards_free_text_no_tools(self, hass):
@@ -190,9 +184,7 @@ class TestHandleMessage:
 
         p1, p2 = _patch_grounding()
         with p1, p2:
-            await entity._async_handle_message(
-                _conversation_input("and the date?"), chat_log
-            )
+            await entity._async_handle_message(_conversation_input("and the date?"), chat_log)
 
         sent = client.chat.call_args.args[0]
         contents = [m["content"] for m in sent if m["role"] != "system"]
@@ -209,13 +201,9 @@ class TestHandleMessage:
 
         p1, p2 = _patch_grounding()
         with p1, p2:
-            result = await entity._async_handle_message(
-                _conversation_input(), chat_log
-            )
+            result = await entity._async_handle_message(_conversation_input(), chat_log)
 
-        assert result.response.speech["plain"]["speech"] == (
-            ERROR_MESSAGES["AGENT_TIMEOUT"]
-        )
+        assert result.response.speech["plain"]["speech"] == (ERROR_MESSAGES["AGENT_TIMEOUT"])
 
     @pytest.mark.asyncio
     async def test_continuation_detected(self, hass):
@@ -226,9 +214,7 @@ class TestHandleMessage:
 
         p1, p2 = _patch_grounding()
         with p1, p2:
-            result = await entity._async_handle_message(
-                _conversation_input(), chat_log
-            )
+            result = await entity._async_handle_message(_conversation_input(), chat_log)
 
         assert result.continue_conversation is True
 
@@ -251,7 +237,7 @@ class TestHandleMessage:
         assert events[0].data["agent_id"] == "cora"
 
     @pytest.mark.asyncio
-    async def test_voice_metadata_sent(self, hass):
+    async def test_voice_caller_context_sent(self, hass):
         client = MagicMock()
         client.chat = AsyncMock(return_value=CHAT_SUCCESS)
         entity = _make_entity(client, hass)
@@ -263,10 +249,30 @@ class TestHandleMessage:
                 _conversation_input(device_id="device-123"), chat_log
             )
 
-        metadata = client.chat.call_args.kwargs["metadata"]
-        assert metadata is not None
-        assert metadata["source"] == "voice"
-        assert metadata["device_id"] == "device-123"
+        caller_context = client.chat.call_args.kwargs["caller_context"]
+        assert caller_context is not None
+        assert caller_context["source_type"] == "voice"
+        assert caller_context["device_id"] == "device-123"
+        assert caller_context["audio_only"] is True
+        # The structured envelope is also rendered into the system prompt.
+        system_prompt = client.chat.call_args.args[0][0]["content"]
+        assert "[home-assistant-source]" in system_prompt
+        assert "Source: voice" in system_prompt
+
+    @pytest.mark.asyncio
+    async def test_text_turn_sends_caller_context(self, hass):
+        client = MagicMock()
+        client.chat = AsyncMock(return_value=CHAT_SUCCESS)
+        entity = _make_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        p1, p2 = _patch_grounding()
+        with p1, p2:
+            await entity._async_handle_message(_conversation_input(), chat_log)
+
+        caller_context = client.chat.call_args.kwargs["caller_context"]
+        assert caller_context["source_type"] == "text"
+        assert "audio_only" not in caller_context
 
 
 class TestActuationSafetyAndAudit:
@@ -280,12 +286,15 @@ class TestActuationSafetyAndAudit:
         chat_log = ChatLog(hass, "conv-1")
 
         # A lock is exposed -> the grounding prompt must carry a deny/confirm caution.
-        with patch(
-            "custom_components.agent_bridge.conversation.async_get_exposed_entities",
-            AsyncMock(return_value=["lock.front_door"]),
-        ), patch(
-            "custom_components.agent_bridge.conversation.build_entity_context",
-            return_value="Front Door (lock.front_door): locked",
+        with (
+            patch(
+                "custom_components.agent_bridge.conversation.async_get_exposed_entities",
+                AsyncMock(return_value=["lock.front_door"]),
+            ),
+            patch(
+                "custom_components.agent_bridge.conversation.build_entity_context",
+                return_value="Front Door (lock.front_door): locked",
+            ),
         ):
             await entity._async_handle_message(_conversation_input(), chat_log)
 
@@ -300,12 +309,15 @@ class TestActuationSafetyAndAudit:
         entity = _make_entity(client, hass)
         chat_log = ChatLog(hass, "conv-1")
 
-        with patch(
-            "custom_components.agent_bridge.conversation.async_get_exposed_entities",
-            AsyncMock(return_value=["light.kitchen"]),
-        ), patch(
-            "custom_components.agent_bridge.conversation.build_entity_context",
-            return_value="Kitchen (light.kitchen): on",
+        with (
+            patch(
+                "custom_components.agent_bridge.conversation.async_get_exposed_entities",
+                AsyncMock(return_value=["light.kitchen"]),
+            ),
+            patch(
+                "custom_components.agent_bridge.conversation.build_entity_context",
+                return_value="Kitchen (light.kitchen): on",
+            ),
         ):
             await entity._async_handle_message(_conversation_input(), chat_log)
 
@@ -324,16 +336,17 @@ class TestActuationSafetyAndAudit:
         events = []
         hass.bus.async_listen(EVENT_ACTUATION_AUDIT, lambda e: events.append(e))
 
-        with patch(
-            "custom_components.agent_bridge.conversation.async_get_exposed_entities",
-            AsyncMock(return_value=["lock.front_door"]),
-        ), patch(
-            "custom_components.agent_bridge.conversation.build_entity_context",
-            return_value="",
+        with (
+            patch(
+                "custom_components.agent_bridge.conversation.async_get_exposed_entities",
+                AsyncMock(return_value=["lock.front_door"]),
+            ),
+            patch(
+                "custom_components.agent_bridge.conversation.build_entity_context",
+                return_value="",
+            ),
         ):
-            await entity._async_handle_message(
-                _conversation_input(device_id="d1"), chat_log
-            )
+            await entity._async_handle_message(_conversation_input(device_id="d1"), chat_log)
         await hass.async_block_till_done()
 
         assert len(events) == 1

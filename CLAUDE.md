@@ -68,7 +68,14 @@ Check TRD before implementing -- it has interface definitions, API contracts, an
 
 ## Current State
 
-Brownfield, **0.3.2** released. EP0007 / CR-0002 (re-align to bridge v4.36 + modern HA)
+Brownfield, **0.4.0** released. 0.4.0 adds a structured speaker/source/location envelope:
+each turn now carries a `caller_context` (source type voice/text/automation, device/speaker
+name, area + floor, language, local time, best-effort unverified account) rendered into the
+system prompt as a labelled `[home-assistant-source]` block and sent as a `caller_context`
+body field (replacing the old, bridge-dropped `metadata`). The bridge half (accept +
+`injectSourceHint` + journal record) lives in agent-bridge `feat/caller-context-passthrough`;
+the HA prompt-inlining delivers the agent-facing benefit without it. EP0007 / CR-0002
+(re-align to bridge v4.36 + modern HA)
 implemented across R1-R5 (248 tests green on HA 2026.2.3 / Python 3.13) at 0.2.0; CR-0003 /
 BG0003 (crew-scoped agent picker + editable HA-origin instructions) shipped in 0.3.0, with the
 0.3.1 crew-projection fix (`?include=crew`). 0.3.2 fixes BG0004: the default
@@ -91,4 +98,4 @@ See `sdlc-studio/IMPLEMENTATION-KICKOFF.md` and the EP0007 epic.
 
 ---
 
-*Version: 0.3.2 -- 2026-06-04 (BG0004 caller_id fix; EP0007 operator live-E2E + fleet provisioning still pending)*
+*Version: 0.4.0 -- 2026-06-05 (caller_context speaker/source/location envelope; EP0007 operator live-E2E + fleet provisioning still pending)*
