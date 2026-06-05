@@ -7,8 +7,8 @@
 
 | Status | Count |
 | --- | --- |
-| Proposed | 2 |
-| Review | 1 |
+| Proposed | 1 |
+| Review | 2 |
 | Implemented | 1 |
 | Rejected | 0 |
 | Deferred | 0 |
@@ -19,7 +19,7 @@
 | Priority | Proposed | Review | Implemented |
 | --- | --- | --- | --- |
 | P1 | 1 | 1 | 0 |
-| P2 | 1 | 0 | 1 |
+| P2 | 0 | 1 | 1 |
 | P3 | 0 | 0 | 0 |
 | P4 | 0 | 0 | 0 |
 
@@ -30,7 +30,7 @@
 | [CR-0001](cr0001.md) | Multiple config entries for per-agent voice pipelines | P1 | Proposed | design-change | — (superseded by CR-0002) | 2026-04-06 |
 | [CR-0002](cr0002.md) | Re-align to Bridge v4.36 + modern HA conversation APIs | P1 | Review | design-change | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | 2026-06-01 |
 | [CR-0003](cr0003.md) | Crew-scoped agent picker + editable per-agent instructions + HA-origin prompt | P2 | Implemented | production-feedback | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | 2026-06-02 |
-| [CR-0004](cr0004.md) | Reactive continuity + proactive + multimodal conversation expansion | P2 | Proposed | feature-request | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | 2026-06-05 |
+| [CR-0004](cr0004.md) | Reactive continuity + proactive + multimodal conversation expansion | P2 | Review | feature-request | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | 2026-06-05 |
 
 ## Dependencies
 

@@ -7,11 +7,11 @@
 | Status | Count |
 |--------|-------|
 | Draft | 0 |
-| Proposed | 1 |
+| Proposed | 0 |
 | Ready | 0 |
 | Planned | 0 |
 | In Progress | 1 |
-| Review | 3 |
+| Review | 4 |
 | Done | 34 |
 | **Total** | **39** |
 
@@ -93,7 +93,7 @@
 | [US0035](US0035-camera-vision-input.md) | Camera/vision input via image attachments | Done | 5 | Darren Benson |
 | [US0036](US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | Done | 5 | Darren Benson |
 | [US0037](US0037-proactive-announcements.md) | Proactive announcements to satellites (HA-as-client) | Done | 8 | Darren Benson |
-| [US0038](US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | Proposed | 8 | Darren Benson |
+| [US0038](US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | Review | 8 | Darren Benson |
 | [US0039](US0039-ai-task-platform.md) | AI Task platform (generate_data, scoped) | Done | 5 | Darren Benson |
 
 ## All Stories
@@ -137,7 +137,7 @@
 | [US0035](US0035-camera-vision-input.md) | Camera/vision input via image attachments | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Done | 5 |
 | [US0036](US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Done | 5 |
 | [US0037](US0037-proactive-announcements.md) | Proactive announcements to satellites (HA-as-client) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Done | 8 |
-| [US0038](US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Proposed | 8 |
+| [US0038](US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Review | 8 |
 | [US0039](US0039-ai-task-platform.md) | AI Task platform (generate_data, scoped) | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | Done | 5 |
 
 ## Notes

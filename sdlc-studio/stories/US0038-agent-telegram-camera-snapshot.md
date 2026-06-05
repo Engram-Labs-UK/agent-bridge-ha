@@ -1,6 +1,6 @@
 # US0038: Agent → Telegram camera snapshot (+ bridge sendPhoto)
 
-> **Status:** Proposed
+> **Status:** Review — HA side shipped (0.7.0 ask_with_image); bridge primitive in PR; full routing follow-up
 > **Epic:** [EP0008: Conversation Capability Expansion](../epics/EP0008-conversation-capability-expansion.md)
 > **Owner:** Darren Benson
 > **Created:** 2026-06-05
@@ -60,3 +60,4 @@ shortcut for cameras they can reach.
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-06-05 | Claude | Initial story for EP0008 (CR-0004), Phase 5 |
+| 2026-06-05 | Claude | HA side covered by `agent_bridge.ask_with_image` (0.7.0) — snapshot → bridge attachment. Bridge primitive `sendPhoto` (URL/file_id + multipart bytes) shipped as agent-bridge PR #42 (9/9 client tests green). **Remaining (follow-up):** wire an agent reply's image attachment → sendPhoto (needs an outbound-attachment contract). **Works today** for OpenClaw agents via their own camera_snap+notify. Status → Review |

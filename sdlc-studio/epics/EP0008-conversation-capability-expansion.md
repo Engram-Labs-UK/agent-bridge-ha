@@ -1,6 +1,8 @@
 # EP0008: Conversation Capability Expansion (continuity, proactive, multimodal)
 
-> **Status:** In Progress — P1–P3 done: …US0035+US0036 (0.7.0), US0037 (0.8.0); P3 remainder US0038 (bridge PR) + P4 US0039 (AI Task) left
+> **Status:** Review — all 8 stories implemented across 0.5.0–0.9.0. Done: US0032, US0034,
+> US0035, US0036, US0037, US0039. Review (gated): US0033 (streaming, live-validation), US0038
+> (Telegram image — bridge PR #42 + outbound-attachment routing follow-up).
 > **Owner:** Darren Benson
 > **Reviewer:** --
 > **Created:** 2026-06-05
@@ -48,7 +50,7 @@ building it (we did: the bridge already persists session by channel, 24h TTL).
 | [US0035](../stories/US0035-camera-vision-input.md) | Camera/vision input via image attachments | Done | none | P2 | 0.7.0 |
 | [US0036](../stories/US0036-confirm-before-actuate.md) | Confirm-before-actuate (pendingAction + timeout + severity) | Done | US0032 | P2 | 0.7.0 |
 | [US0037](../stories/US0037-proactive-announcements.md) | Proactive announcements to satellites (HA-as-client) | Done | none | P3 | 0.8.0 |
-| [US0038](../stories/US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | Proposed | US0035 | P3 | 0.9.0 |
+| [US0038](../stories/US0038-agent-telegram-camera-snapshot.md) | Agent → Telegram camera snapshot (+ bridge sendPhoto) | Review | US0035 | P3 | 0.9.0 |
 | [US0039](../stories/US0039-ai-task-platform.md) | AI Task platform (generate_data, scoped) | Done | none | P4 | 0.9.0 |
 
 ## Execution Order
