@@ -41,14 +41,22 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Install camera native dependency
+        # EP0008: the vision (camera) + AI Task tests import
+        # homeassistant.components.camera, whose PyTurboJPEG requirement loads
+        # the libturbojpeg shared library via ctypes at import time.
+        run: sudo apt-get update && sudo apt-get install -y libturbojpeg0
+
       - name: Install dependencies (pinned HA core)
         run: |
           pip install "homeassistant==${HA_VERSION}" \
             pytest pytest-asyncio pytest-homeassistant-custom-component
-          # The conversation component's requirements are loaded by HA at runtime,
-          # not pip-installed by the homeassistant package. conftest imports
-          # homeassistant.components.conversation, so install them explicitly.
-          pip install hassil home-assistant-intents
+          # Component requirements are loaded by HA at runtime, not pip-installed
+          # by the homeassistant package. The tests import these components, so
+          # install their requirements explicitly:
+          #   conversation -> hassil, home-assistant-intents
+          #   camera / ai_task (EP0008 vision + AI Task) -> PyTurboJPEG
+          pip install hassil home-assistant-intents "PyTurboJPEG==1.7.5"
 
       - name: Run tests
         run: python -m pytest tests/ -q
