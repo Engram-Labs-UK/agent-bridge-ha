@@ -7,12 +7,12 @@
 
 | Status | Count |
 | --- | --- |
-| Proposed | 0 |
+| Proposed | 1 |
 | Review | 2 |
 | Implemented | 7 |
 | Rejected | 0 |
 | Deferred | 1 |
-| **Total** | **10** |
+| **Total** | **11** |
 
 ## By Priority
 
@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- |
 | P1 | 0 | 1 | 1 | 1 |
 | P2 | 0 | 1 | 5 | 0 |
-| P3 | 0 | 0 | 1 | 0 |
+| P3 | 1 | 0 | 1 | 0 |
 | P4 | 0 | 0 | 0 | 0 |
 
 > The two remaining **Review** CRs (CR-0002, CR-0004) are **component-complete**: all
@@ -43,6 +43,7 @@
 | [CR-0008](cr0008.md) | Re-baseline to bridge v4.141 + capability audit | P1 | Implemented | spec-gap | — | 2026-06-09 |
 | [CR-0009](cr0009.md) | Surface bridge usage/cost and fleet doctor in HA | P2 | Implemented | feature-request | — | 2026-06-09 |
 | [CR-0010](cr0010.md) | Agent memory record/recall from Home Assistant | P2 | Implemented | feature-request | — | 2026-06-09 |
+| [CR-0011](cr0011.md) | Full PRD/TRD/TSD reconcile to post-EP0008/CR-0010 reality | P3 | Proposed | spec-gap | — | 2026-06-09 |
 
 ## Dependencies
 

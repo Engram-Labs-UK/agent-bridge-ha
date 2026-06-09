@@ -2,7 +2,7 @@
 
 **Project:** Agent Bridge HA
 **Version:** 0.1.0
-**Last Updated:** 2026-06-01
+**Last Updated:** 2026-06-09
 **Status:** Complete (v0.1 spec — see review banner)
 **Last Review:** 2026-06-01 — reconcile + prd/trd/tsd review against bridge v4.36 + current HA APIs (CR-0002 redesign basis)
 
@@ -70,8 +70,10 @@ This is the first `agent-bridge-*` platform adapter. The naming convention (`age
 | Primary Conversation Agent | Single conversation agent using bridge default routing (includes voice source signalling) | P0 | EP0002 |
 | Entity Exposure | Format HA entity state as AI-consumable context | P0 | EP0002 |
 | Room Awareness | Inject device area into voice request prompts | P0 | EP0002 |
-| HA Service Execution | Execute HA services from agent tool_call responses | P0 | EP0002 |
+| HA Service Execution | ~~Execute HA services from agent tool_call responses~~ — superseded: agent actuates via its own `/api/mcp` mount (EP0007/CR-0006, Option A) | P0 | EP0002 |
 | Session Persistence | Agent-scoped sessions survive HA restarts | P1 | EP0002 |
+| Usage & Cost Sensors | Per-agent token + GBP cost sensors + fleet-doctor diagnostics & repair | P2 | CR-0009 |
+| Agent Memory Services | `agent_bridge.memory_record` / `memory_recall` | P2 | CR-0010 |
 | Bridge Health Sensors | Bridge status, connectivity, agent count sensors | P0 | EP0003 |
 | Event Entities | HA events for agent messages and tool invocations | P1 | EP0003 |
 | Services | send_message and invoke_tool HA services | P1 | EP0003 |
@@ -121,11 +123,12 @@ This is the first `agent-bridge-*` platform adapter. The naming convention (`age
 - [x] Step 2: User selects default chat agent and default voice agent from discovered list
 - [x] Options flow allows changing default agents, context limits, and feature toggles post-setup
 - [x] Options flow: context_max_chars (1000-200000, default 13000)
-- [x] Options flow: context_strategy (truncate or clear, default truncate)
-- [x] Options flow: enable_per_agent_entities (boolean, default false)
-- [x] Options flow: enable_tool_calls (boolean, default true)
+- [x] ~~Options flow: context_strategy~~ — removed (CR-0006); entity context always budgets via `truncate`
+- [x] ~~Options flow: enable_per_agent_entities~~ — removed (dead option, CR-0006); per-agent entities are config subentries
+- [x] ~~Options flow: enable_tool_calls~~ — removed (CR-0006); actuation is agent-side via `/api/mcp`
 - [x] Options flow: thinking_timeout (10-3600 seconds, default 120)
 - [x] Options flow: ssl_verify (boolean, default true)
+- [x] Options flow: session_idle_window, enable_streaming, caller_id, debug_logging (CR-0007 grouped Essentials + Advanced section)
 - [x] Options flow: debug_logging (boolean, default false)
 - [x] Config entry stores bridge URL, token, selected agents, and all options
 
@@ -206,18 +209,25 @@ This is the first `agent-bridge-*` platform adapter. The naming convention (`age
 
 #### HA Service Execution
 
+> **SUPERSEDED (EP0007 / CR-0006, Option A).** The HA-side tool-execution loop described
+> below was **removed** — the agent now actuates Home Assistant through its **own
+> `/api/mcp` mount** (HA's MCP Server integration). This integration forwards the
+> utterance + grounding context and fires `EVENT_ACTUATION_AUDIT` per reactive turn; it
+> does **not** parse `tool_calls` or call `hass.services.async_call()` for the agent.
+> The criteria below are retained struck-through for the historical record; see
+> US0027/US0031 and `AGENTS.md` Critical Rule 4. (`enable_tool_calls`, the
+> `agent_bridge_tool_invoked` event, and `tool_executor.py` no longer exist.)
+
 **User Story:** As a voice satellite user, I want the agent to actually control my home (turn on lights, set thermostats, lock doors) when I ask, not just describe what it would do.
 
-**Acceptance Criteria:**
-- [x] When agent response includes `tool_calls` in the OpenAI chat completion format, the integration intercepts and executes them
-- [x] Supports `execute_service` tool call: extracts `domain`, `service`, `entity_id` (or `target` dict) and calls `hass.services.async_call()`
-- [x] Supports `execute_services` (plural) for batched multi-entity commands in a single response
-- [x] Tool call results (success/failure) are sent back to the agent as tool_call result messages for final response formulation
-- [x] Only exposed entities can be targeted (validates entity_id against exposure list before execution)
-- [x] Tool execution gated behind `enable_tool_calls` option (default: true)
-- [x] Each tool execution fires `agent_bridge_tool_invoked` event with: tool_name, entity_id, status, duration_ms
-- [x] Failed tool calls return descriptive error to agent (e.g. "Entity light.kitchen not found") rather than raising an exception
-- [x] Tool execution timeout of 10 seconds per service call (prevents hanging on unresponsive devices)
+**Acceptance Criteria (superseded — agent-side actuation):**
+- [x] ~~When agent response includes `tool_calls`, the integration intercepts and executes them~~ — replaced by agent-side `/api/mcp` actuation
+- [x] ~~`execute_service` / `execute_services` via `hass.services.async_call()`~~ — removed (CR-0006)
+- [x] ~~Tool call results sent back to the agent~~ — N/A under Option A
+- [x] Only exposed entities can be targeted — still enforced via fail-closed exposure (US0027/AC4)
+- [x] ~~Gated behind `enable_tool_calls` option~~ — option removed (CR-0006)
+- [x] ~~Fires `agent_bridge_tool_invoked` event~~ — removed; the audit surface is `EVENT_ACTUATION_AUDIT`
+- [x] Safety-relevant domains require confirm-before-actuate ([confirm:LEVEL], US0036)
 
 **Dependencies:** Primary Conversation Agent, Entity Exposure
 **Status:** Complete
@@ -244,8 +254,7 @@ This is the first `agent-bridge-*` platform adapter. The naming convention (`age
 
 **Acceptance Criteria:**
 - [x] `event.agent_bridge_message_received` fires on agent response with: agent_id, model, content_preview, timestamp
-- [x] `event.agent_bridge_tool_invoked` fires on tool invocation with subtypes: `tool_invoked_ok`, `tool_invoked_error`
-- [x] Tool event includes: agent_id, tool_name, duration_ms, status
+- [x] ~~`event.agent_bridge_tool_invoked` fires on tool invocation~~ — removed (CR-0006); the entity never fired once actuation moved agent-side. Actuation is recorded via `EVENT_ACTUATION_AUDIT` (per reactive turn)
 - [x] Events are HA event entities (visible in automation trigger UI)
 
 **Dependencies:** Primary Conversation Agent
@@ -629,6 +638,7 @@ Entire codebase -- 2,255 lines of Python across 13 modules with 0% test coverage
 | 2026-04-05 | 0.1.1 | RV0001 review: fixed voice_agent naming inconsistency in Primary Conversation Agent AC |
 | 2026-04-05 | 0.1.2 | PRD review: merged 3 sub-features into parents (22→19 features), reordered table by epic, fixed Entity Exposure AC7, made Continuation Detection AC4 concrete, added Session data model, resolved Open Questions Q1 and Q3 |
 | 2026-04-05 | 0.1.3 | RV0005 review: updated 16 Phase 1 feature statuses Not Started→Complete (code exists), ticked all Phase 1 AC checkboxes, resolved Open Question Q2 (hybrid approach implemented), updated Quality Assessment with actual coverage (0%) |
+| 2026-06-09 | 0.10.0 | RV0006 release-gate review: marked HA Service Execution + Tool Invoked event + the removed options as superseded by Option A / CR-0006 (agent actuates via its own `/api/mcp` mount); added Usage & Cost Sensors (CR-0009) and Agent Memory Services (CR-0010) to the feature inventory. Shipped this release: CR-0006 (dead-code cull), CR-0007 (options UX), CR-0008 (bridge v4.141 re-baseline), CR-0009, CR-0010, BG0005 (entity naming). Full §3/§7 feature-detail + TRD/TSD expansion tracked in CR-0011. |
 
 ---
 
