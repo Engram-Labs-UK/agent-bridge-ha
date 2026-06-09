@@ -7,10 +7,10 @@
 | Status | Count |
 |--------|-------|
 | Open | 0 |
-| Fixed | 9 |
+| Fixed | 10 |
 | In Progress | 0 |
 | Closed | 0 |
-| **Total** | **9** |
+| **Total** | **10** |
 
 ## Bugs
 
@@ -25,6 +25,7 @@
 | [BG0007](BG0007-fleet-doctor-issue-lifecycle.md) | Fleet-doctor repair issue wrongly cleared on bridge outage + churns every poll | Medium | P2 | Fixed | coordinator/drift |
 | [BG0008](BG0008-coordinator-emits-observability-by-reference.md) | Coordinator emits usage/doctor by reference (aliasing hazard) | Low | P3 | Fixed | coordinator/sensor |
 | [BG0009](BG0009-first-run-picker-lost-status-label.md) | First-run agent picker lost its health/crew label (BG0005 regression) | Low | P3 | Fixed | config_flow.py |
+| [BG0010](BG0010-brand-icon-wrong-location.md) | Brand icon in wrong location — "icon not available" (needs `brand/` subdir, HA 2026.3+) | Low | P3 | Fixed | brand assets |
 
 ## Notes
 
