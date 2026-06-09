@@ -32,15 +32,34 @@
             "init": {
                 "title": "Agent Bridge Options",
                 "data": {
-                    "default_agent": "Agent",
-                    "context_max_chars": "Max Entity Context (chars)",
-                    "thinking_timeout": "Agent Response Timeout (seconds)",
-                    "ssl_verify": "Verify SSL Certificates",
-                    "debug_logging": "Voice Debug Logging",
-                    "caller_id": "Caller ID (x-bridge-mcp-caller)"
+                    "default_agent": "Default / voice agent",
+                    "ssl_verify": "Verify SSL certificates"
                 },
                 "data_description": {
-                    "caller_id": "Registered agent id this Home Assistant presents to the bridge so it can resolve your crew. Leave blank to use the selected agent."
+                    "default_agent": "The agent used for voice and chat by default. Add more agents as separate conversation entities with \"Add agent\".",
+                    "ssl_verify": "Turn off only for a self-signed or LAN bridge; leave on for a valid certificate."
+                },
+                "sections": {
+                    "advanced": {
+                        "name": "Advanced",
+                        "description": "Tuning with sensible defaults -- most installs can leave these alone.",
+                        "data": {
+                            "context_max_chars": "Max entity context (characters)",
+                            "thinking_timeout": "Agent response timeout (seconds)",
+                            "session_idle_window": "Session continuity window (seconds)",
+                            "enable_streaming": "Stream replies to voice (experimental)",
+                            "debug_logging": "Voice debug logging",
+                            "caller_id": "Caller ID (x-bridge-mcp-caller)"
+                        },
+                        "data_description": {
+                            "context_max_chars": "How much Home Assistant entity state to put in the prompt (1000-200000). Higher means the agent sees more, at more tokens and latency.",
+                            "thinking_timeout": "How long Assist waits for the agent before giving up (10-3600).",
+                            "session_idle_window": "How long related turns reuse the same bridge session before the channel key rotates (0-86400). 0 = no continuity; 86400 = the bridge 24h cap.",
+                            "enable_streaming": "Lower TTS latency by streaming the reply as it is generated. Experimental; falls back to non-streaming on any error.",
+                            "debug_logging": "Verbose logging for each voice turn. Leave off in normal use.",
+                            "caller_id": "Registered agent id this Home Assistant presents to the bridge so it can resolve your crew. Leave blank to use the selected agent."
+                        }
+                    }
                 }
             }
         }
