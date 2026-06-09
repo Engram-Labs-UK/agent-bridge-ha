@@ -1,6 +1,6 @@
 # BG0001: No way to change voice agent after initial setup
 
-> **Status:** Open
+> **Status:** Fixed
 > **Severity:** High
 > **Priority:** P1
 > **Reporter:** Darren
@@ -49,30 +49,30 @@ Adding them to the options flow requires calling `client.discover()` to get the 
 
 ## Fix Description
 
-> *Pending*
-
-Add `default_agent` and `voice_agent` selectors to the options flow. Requires:
-1. Create bridge client from config entry data in options flow
-2. Call `client.discover()` to get current agents
-3. Show agent dropdown fields pre-populated with current selection
-4. On save, update `entry.data` via `hass.config_entries.async_update_entry()`
+Resolved by the EP0007 realignment (shipped, never closed). The options flow
+(`AgentBridgeOptionsFlow.async_step_init`) now opens with a required agent picker
+(`CONF_DEFAULT_AGENT`, populated via `_get_agent_options` -> `client.discover()`),
+and on save updates `entry.data[CONF_DEFAULT_AGENT]`/`[CONF_VOICE_AGENT]` via
+`async_update_entry` (`config_flow.py:300-316`). CR-0007 (Wave 2) additionally
+renamed it "Default / voice agent" and placed it as the first essential field.
+Closed in Wave 5 (backlog reconcile) -- code already in `main`.
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `config_flow.py` | Add agent selection to `AgentBridgeOptionsFlow.async_step_init()` |
+| `config_flow.py` | Agent picker in `async_step_init`; saves to `entry.data` (EP0007); relabelled (CR-0007) |
 
 ---
 
 ## Verification
 
-- [ ] Fix verified in development
-- [ ] Regression tests pass
-- [ ] No side effects observed
+- [x] Fix verified in development (options flow shows + saves the agent; `test_config_flow` covers the flatten/save round-trip)
+- [x] Regression tests pass (CI)
+- [x] No side effects observed
 
-**Verified by:** --
-**Verification date:** --
+**Verified by:** code review + CI; live options screen confirmation on next deploy
+**Verification date:** 2026-06-09
 
 ---
 

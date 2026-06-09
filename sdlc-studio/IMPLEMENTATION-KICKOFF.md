@@ -39,3 +39,22 @@ pip install -U pip
 pip install pytest pytest-homeassistant-custom-component homeassistant   # pin to the version in pyproject/HA floor
 python -m pytest tests/ -q
 ```
+
+---
+
+## Component-complete close — external gates (2026-06-09, Wave 5 reconcile)
+
+The autonomous code-health + backlog-closure pass (CR-0005..CR-0010, BG0005) is shipped and CI-green. Every in-repo item is closed. Two CRs remain **component-complete** — all HA-side code is done, only irreducibly-external work is outstanding. These are tracked here, not as open HA bugs:
+
+**CR-0002 / EP0007** (reactive realignment — component code done, 248+ tests green):
+- **US0021 AC2** — operator captures a live HA reactive-turn log on 10.0.0.209 (information-gathering; no code).
+- **US0027 AC2/AC3** — operator runs the live "turn on the lights" E2E with DBee + confirms actuation-audit events reach the bridge (reuse `bridge_mark_critical_audit_event`).
+- **US0031 AC3** — provision the shared `/api/mcp` mount into the Cora/Eve/Julian harnesses (other repos), then per-agent E2E.
+
+**CR-0004 / EP0008** (conversation expansion — 6/8 stories Done, code shipped):
+- **US0033 AC2** — human perception that streaming lowers TTS latency on the live install (irreducibly human).
+- **US0038 AC2** — bridge PR #42 outbound-attachment routing (agent reply image → Telegram `sendPhoto`) merges, then live E2E.
+
+None of these can be done by editing `agent-bridge-ha` alone. The component code is complete and merged; closing them is gated on the live deploy, human sign-off, or the cross-repo bridge PR above. They are deliberately left in `Review` rather than marked Implemented so no external AC is falsely claimed as verified.
+
+**Also pending the next deploy** (code in `main`, live install runs 0.9.0): BG0005 friendly-name fix, CR-0007 options UI, CR-0009 usage/cost sensors + doctor diagnostics, CR-0010 memory services. Confirm on the live install after a HACS update.
