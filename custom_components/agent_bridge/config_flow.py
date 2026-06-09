@@ -110,7 +110,9 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                 if not alive:
                     errors["base"] = "cannot_connect"
                 else:
-                    self._agents = await client.discover()
+                    # include=crew so the first-run picker shows "name (crew)" like the
+                    # options + subentry pickers (BG0009).
+                    self._agents = await client.discover(include=["crew"])
                     if not self._agents:
                         errors["base"] = "no_agents"
                     else:
@@ -391,7 +393,8 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                 timeout=10,
                 ssl_verify=self._config_entry.options.get(CONF_SSL_VERIFY, True),
             )
-            agents = await client.discover()
+            # include=crew so the options picker label is "name (crew)" (BG0009).
+            agents = await client.discover(include=["crew"])
             # Real, selectable agents only -- not models/chatbots/workerbots (CR-0003).
             return {a["id"]: agent_label(a) for a in agents if is_selectable_agent(a)}
         except Exception:
