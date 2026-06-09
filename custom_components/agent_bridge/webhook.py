@@ -124,6 +124,11 @@ async def _handle_webhook(
             await coordinator.async_request_refresh()
     elif event_type == "message:error":
         _LOGGER.warning("Bridge reported a message error: %s", event_data)
+    elif event_type == "message:sent":
+        # v4.x outbound-send notification (CR-0008). Subscribed so the bridge's
+        # delivery stats stay accurate; intentionally not wired to a refresh or HA
+        # event -- it carries no roster/health/drift signal this integration acts on.
+        _LOGGER.debug("Bridge message sent: %s", event_data)
 
     return Response(status=200)
 

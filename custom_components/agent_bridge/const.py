@@ -57,7 +57,7 @@ MAX_TEXT_DEPTH = 8  # recursive response text extraction depth
 # Drift baselines (US0029). The integration is built+tested against these; the
 # agent-context drift check raises an HA repair issue when the live bridge moves
 # past the baseline, and CI pins the HA core.
-TESTED_BRIDGE_VERSION = "4.36.0"
+TESTED_BRIDGE_VERSION = "4.141.0"
 TESTED_HA_VERSION = "2026.2.3"
 
 # Event types (HA bus)
@@ -92,6 +92,7 @@ BRIDGE_WEBHOOK_EVENTS = (
     "agent:unregistered",
     "agent:updated",
     "agent:health-changed",
+    "message:sent",
     "message:error",
     "bridge:upgraded",
 )
