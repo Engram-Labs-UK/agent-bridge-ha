@@ -17,6 +17,10 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult, section
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
     TextSelectorConfig,
 )
@@ -26,11 +30,10 @@ from .const import (
     CONF_AGENT_ID,
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
-    CONF_CALLER_ID,
     CONF_CONTEXT_MAX_CHARS,
     CONF_CREW,
-    CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
+    CONF_DOCTOR_ALERTS,
     CONF_ENABLE_STREAMING,
     CONF_PROMPT,
     CONF_SESSION_IDLE_WINDOW,
@@ -44,6 +47,7 @@ from .const import (
     DEFAULT_SESSION_IDLE_WINDOW,
     DEFAULT_THINKING_TIMEOUT,
     DOMAIN,
+    SESSION_IDLE_PRESETS,
     SUBENTRY_TYPE_CONVERSATION,
 )
 from .helpers import agent_crew, agent_label, is_selectable_agent, resolve_caller_id
@@ -53,6 +57,19 @@ ALL_CREWS = "__all__"
 # Collapsible "Advanced" section in the options form (CR-0007). Stored options stay
 # flat -- the section is flattened back to top level on submit for back-compat.
 ADVANCED_SECTION = "advanced"
+
+# CR-0013: friendly labels for the session-continuity preset dropdown.
+_SESSION_IDLE_LABELS = {
+    0: "Off (no continuity)",
+    300: "5 minutes",
+    1800: "30 minutes",
+    7200: "2 hours",
+    28800: "8 hours",
+    86400: "24 hours (bridge max)",
+}
+_SESSION_IDLE_OPTIONS = [
+    SelectOptionDict(value=str(s), label=_SESSION_IDLE_LABELS[s]) for s in SESSION_IDLE_PRESETS
+]
 
 
 async def _discover_agents(hass, entry: ConfigEntry) -> list[dict[str, Any]]:
@@ -151,7 +168,6 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_CONTEXT_MAX_CHARS: DEFAULT_CONTEXT_MAX_CHARS,
                     CONF_THINKING_TIMEOUT: DEFAULT_THINKING_TIMEOUT,
                     CONF_SSL_VERIFY: True,
-                    CONF_DEBUG_LOGGING: False,
                 },
             )
 
@@ -309,6 +325,14 @@ class AgentBridgeOptionsFlow(OptionsFlow):
             advanced = user_input.pop(ADVANCED_SECTION, {})
             merged = {**user_input, **advanced}
 
+            # CR-0013: the session-continuity dropdown yields a string; store it as an
+            # int so conversation.py keeps reading a number.
+            if CONF_SESSION_IDLE_WINDOW in merged:
+                try:
+                    merged[CONF_SESSION_IDLE_WINDOW] = int(merged[CONF_SESSION_IDLE_WINDOW])
+                except (TypeError, ValueError):
+                    merged[CONF_SESSION_IDLE_WINDOW] = DEFAULT_SESSION_IDLE_WINDOW
+
             # Agent selection lives in entry.data, not options.
             new_agent = merged.pop(CONF_DEFAULT_AGENT, None)
             if new_agent:
@@ -337,6 +361,15 @@ class AgentBridgeOptionsFlow(OptionsFlow):
             ): bool,
         }
 
+        # CR-0013: pre-select the stored session value if it is a known preset, else
+        # fall back to the default preset (handles legacy non-preset values).
+        stored_session = options.get(CONF_SESSION_IDLE_WINDOW, DEFAULT_SESSION_IDLE_WINDOW)
+        session_default = (
+            str(stored_session)
+            if stored_session in SESSION_IDLE_PRESETS
+            else str(DEFAULT_SESSION_IDLE_WINDOW)
+        )
+
         # Advanced: tuning that has sane defaults; collapsed by default.
         advanced_schema = vol.Schema(
             {
@@ -348,27 +381,27 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                     CONF_THINKING_TIMEOUT,
                     default=options.get(CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT),
                 ): vol.All(int, vol.Range(min=10, max=3600)),
-                # US0032: idle gap (s) that rotates the session channel key.
-                # 0 = rotate every turn (no continuity); 86400 = bridge TTL cap.
+                # US0032/CR-0013: idle gap that rotates the session channel key, as a
+                # friendly preset dropdown (Off..24h). Stored as an int (coerced above).
                 vol.Optional(
                     CONF_SESSION_IDLE_WINDOW,
-                    default=options.get(CONF_SESSION_IDLE_WINDOW, DEFAULT_SESSION_IDLE_WINDOW),
-                ): vol.All(int, vol.Range(min=0, max=86400)),
+                    default=session_default,
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=_SESSION_IDLE_OPTIONS,
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 # US0033: opt-in response streaming to TTS (experimental).
                 vol.Optional(
                     CONF_ENABLE_STREAMING,
                     default=options.get(CONF_ENABLE_STREAMING, DEFAULT_ENABLE_STREAMING),
                 ): bool,
+                # CR-0012: opt-in fleet-doctor repair issue (operator diagnostic).
                 vol.Optional(
-                    CONF_DEBUG_LOGGING,
-                    default=options.get(CONF_DEBUG_LOGGING, False),
+                    CONF_DOCTOR_ALERTS,
+                    default=options.get(CONF_DOCTOR_ALERTS, False),
                 ): bool,
-                # BG0004: the bridge requires a registered agent id as the caller.
-                # Blank falls back to the selected agent (always registered).
-                vol.Optional(
-                    CONF_CALLER_ID,
-                    default=options.get(CONF_CALLER_ID, ""),
-                ): str,
             }
         )
 

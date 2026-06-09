@@ -4,8 +4,9 @@
 > `reviews/RV0006-unified-review-release-gate-0.10.0.md`. This file is rewritten by every
 > `/sdlc-studio review`; authoritative state is `/sdlc-studio status` + the specs.
 
-- **Version:** **0.10.1** (0.10.0 + the RV0006 code-review fixes BG0006-BG0009). Tested against Home Assistant 2026.2.3 / Python 3.13 (`const.TESTED_HA_VERSION`, pinned in CI) and **bridge v4.141.0** (`const.TESTED_BRIDGE_VERSION`, re-baselined CR-0008). CI green per wave.
-- **0.10.1 fixes (post-release code review):** BG0006 (token sensor crashed on null/non-numeric totals; now guarded), BG0007 (fleet-doctor repair issue no longer wrongly cleared on a bridge outage + gated against per-poll churn), BG0008 (coordinator emits usage/doctor as copies), BG0009 (first-run picker requests crew so labels read `name (crew)`).
+- **Version:** **0.11.0**. Tested against Home Assistant 2026.2.3 / Python 3.13 (`const.TESTED_HA_VERSION`, pinned in CI) and **bridge v4.141.0** (`const.TESTED_BRIDGE_VERSION`, re-baselined CR-0008). CI green per release.
+- **0.10.1-0.10.3 fixes:** BG0006-0009 (RV0006 code review — token-sensor crash guard, doctor-issue lifecycle, aliasing, picker label), BG0010 (brand icon → `brand/`), BG0011 (doctor repair CRITICAL-only).
+- **0.11.0 (options refinements):** CR-0012 fleet-doctor repair now **opt-in** (default off, "Fleet health alerts"); CR-0013 removed Caller ID + Voice-debug toggles, turned Session continuity into a preset dropdown (Off/5m/30m/2h/8h/24h, default 5m), kept Stream-replies as experimental. Per-turn detail now uses HA's native per-entry debug logging.
 - **Spec currency:** PRD/TRD/TSD carry RV0006 currency notes; the actively-false tool-loop/options/event claims are corrected. The full spec expansion is tracked in **CR-0011** (docs-only, P3).
 - Reactive path on `ConversationEntity` + `ChatLog` (one entity per agent via config subentries); actuation via the agent's own `/api/mcp` mount (Option A), with deny/confirm list + fail-closed exposure + an `EVENT_ACTUATION_AUDIT` hook. There is **no HA-side tool loop** (CR-0006 removed the dead one; `AGENTS.md` Rule 4 reflects this).
 

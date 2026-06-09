@@ -13,9 +13,11 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_BRIDGE_TOKEN, CONF_CALLER_ID, DOMAIN
+from .const import CONF_BRIDGE_TOKEN, DOMAIN
 
-TO_REDACT = {CONF_BRIDGE_TOKEN, CONF_CALLER_ID}
+# Redact the bridge token; also redact any orphaned "caller_id" left in stored options
+# from before CR-0013 removed that field.
+TO_REDACT = {CONF_BRIDGE_TOKEN, "caller_id"}
 
 
 async def async_get_config_entry_diagnostics(

@@ -210,6 +210,31 @@ class TestOptionsFlow:
         assert "advanced" not in data
         assert "default_agent" not in data
 
+    @pytest.mark.asyncio
+    async def test_session_window_coerced_to_int(self):
+        # CR-0013: the session-continuity dropdown yields a string; it must be stored
+        # as an int so conversation.py keeps reading a number.
+        entry = MagicMock()
+        entry.options = {}
+        entry.data = {}
+        flow = AgentBridgeOptionsFlow(entry)
+        flow.hass = MagicMock()
+
+        with patch.object(
+            AgentBridgeOptionsFlow, "_get_agent_options",
+            AsyncMock(return_value={"cora": "Cora"}),
+        ):
+            result = await flow.async_step_init(
+                {
+                    "default_agent": "cora",
+                    "ssl_verify": True,
+                    "advanced": {"session_idle_window": "1800", "doctor_alerts": True},
+                }
+            )
+        assert result["data"]["session_idle_window"] == 1800
+        assert isinstance(result["data"]["session_idle_window"], int)
+        assert result["data"]["doctor_alerts"] is True
+
 
 class TestOptionsTranslations:
     """CR-0007: every option field has a human label and the two files agree."""
@@ -235,7 +260,9 @@ class TestOptionsTranslations:
             "thinking_timeout",
             "session_idle_window",
             "enable_streaming",
-            "debug_logging",
-            "caller_id",
+            "doctor_alerts",
         }
         assert expected <= labels
+        # CR-0013 removed these
+        assert "caller_id" not in labels
+        assert "debug_logging" not in labels
