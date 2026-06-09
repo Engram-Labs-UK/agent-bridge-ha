@@ -227,14 +227,18 @@ class TestDoctorRepairIssue:
         assert issue.severity == ir.IssueSeverity.ERROR
 
     @pytest.mark.asyncio
-    async def test_warning_raises_warning_issue(self, hass):
+    async def test_warning_does_not_raise_issue(self, hass):
+        # BG0011: an advisory WARNING (e.g. an idle/quiet fleet) must not nag via a
+        # repair notification; it stays in diagnostics only.
         from homeassistant.helpers import issue_registry as ir
 
-        entry = self._entry_with_doctor(hass, "doc_2", {"verdict": "WARNING", "findings": []})
+        entry = self._entry_with_doctor(
+            hass,
+            "doc_2",
+            {"verdict": "WARNING", "findings": [{"area": "fleet", "detail": "fleet quiet"}]},
+        )
         async_check_doctor_verdict(hass, entry)
-        issue = ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_2")
-        assert issue is not None
-        assert issue.severity == ir.IssueSeverity.WARNING
+        assert ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_2") is None
 
     @pytest.mark.asyncio
     async def test_healthy_clears_issue(self, hass):
