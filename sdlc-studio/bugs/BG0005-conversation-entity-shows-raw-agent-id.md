@@ -6,7 +6,7 @@ Related: help/bug.md, reference-bug.md
 -->
 # BG0005: Conversation entity shows the raw bridge agent id instead of the agent name
 
-> **Status:** Open
+> **Status:** Fixed
 > **Severity:** Medium
 > **Priority:** P2
 > **Reporter:** Darren Benson
@@ -76,33 +76,34 @@ Two defects:
 
 ## Fix Description
 
-> *Proposed - not yet applied*
-
-Name the conversation entity from the agent's discovered record via `_agent_label` (`name (crew)`), the same formatter as the options picker. In the fallback path, look the `default_agent` up in `agents_by_id` and use its `name`/crew; fall back to the id only if discovery has no record. Apply to both `_attr_name` and `DeviceInfo(name=...)`.
+Fixed in Wave 1 (`chore/code-health-wave1`). The picker formatter `_agent_label` was lifted into `helpers.agent_label` as the single shared name formatter (`name (crew)`, else the bare name, never the raw id). `conversation.async_setup_entry` and `ai_task.async_setup_entry` now resolve the display name from discovery (`agents_by_id`) via `agent_label`, falling back to the subentry title / id only when the bridge has no record. To make `name (crew)` available to the entities, the coordinator now discovers with `include=["crew"]` and parses the crew via `agent_crew` into `AgentInfo.crew` (previously never populated).
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `conversation.py` | Resolve entity/device name via `_agent_label` from discovery; fix `_agents_from_entry` fallback to not echo the id |
+| `helpers.py` | New shared `agent_label`; simplified to drop the ugly `(status)`/`(unknown)` fallback |
+| `config_flow.py` | Use shared `agent_label` (removed the local duplicate) |
+| `conversation.py` | Resolve entity/device name via `agent_label` from discovery |
+| `ai_task.py` | Same display-name resolution |
+| `coordinator.py` | `discover(include=["crew"])` + `crew=agent_crew(raw)` so crew is populated |
 
 ### Tests Added
 
 | Test | Description | File |
 |------|-------------|------|
-| TC-bg0005-1 | Fallback-path entity name resolves to `name (crew)` from discovery, not the raw id | `tests/test_conversation.py` |
-| TC-bg0005-2 | Entity name matches the options-picker label for the same agent | `tests/test_conversation.py` |
+| TestAgentLabel | `name (crew)` / bare name / crew-dict shape / never the raw id when named | `tests/test_helpers.py` |
 
 ---
 
 ## Verification
 
-- [ ] Fix verified in development (unit tests green)
-- [ ] Regression tests pass
-- [ ] Live: `conversation.*` friendly name shows `name (crew)`, no raw id (functional)
+- [x] Fix verified in development (unit: `TestAgentLabel`; ruff + format clean; pytest green in CI)
+- [x] Regression tests pass (CI)
+- [ ] Live: `conversation.*` friendly name shows `name (crew)`, no raw id -- confirm after a live HA reload (entity_id stays frozen; only friendly_name updates)
 
-**Verified by:** —
-**Verification date:** —
+**Verified by:** CI (functional); live friendly_name check pending a reload of the live install
+**Verification date:** 2026-06-09
 **Verification depth:** functional
 
 > A bug cannot be marked **Fixed** until depth is at least `functional`.

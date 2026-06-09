@@ -1,4 +1,4 @@
-"""Tests for helpers module -- response text extraction and tool call extraction."""
+"""Tests for helpers module -- response text extraction, caller id, agent label."""
 
 from types import SimpleNamespace
 
@@ -8,8 +8,8 @@ from custom_components.agent_bridge.const import (
     DEFAULT_CALLER_ID,
 )
 from custom_components.agent_bridge.helpers import (
+    agent_label,
     extract_response_text,
-    extract_tool_calls,
     resolve_caller_id,
 )
 
@@ -112,42 +112,26 @@ class TestExtractResponseText:
         assert extract_response_text(data) is None
 
 
-class TestExtractToolCalls:
-    """Tests for extract_tool_calls."""
+class TestAgentLabel:
+    """BG0005: shared label is ``name (crew)``, else the name, never the raw id."""
 
-    def test_standard_tool_calls(self):
-        data = {
-            "choices": [
-                {
-                    "message": {
-                        "tool_calls": [
-                            {"id": "call_1", "function": {"name": "test"}}
-                        ]
-                    }
-                }
-            ]
-        }
-        result = extract_tool_calls(data)
-        assert len(result) == 1
-        assert result[0]["id"] == "call_1"
+    def test_name_and_crew(self):
+        assert agent_label({"id": "openclaw-openclaw-cora", "name": "Cora", "crew": "deskpoint"}) == (
+            "Cora (deskpoint)"
+        )
 
-    def test_no_tool_calls(self):
-        data = {"choices": [{"message": {"content": "Hello"}}]}
-        assert extract_tool_calls(data) == []
+    def test_crew_dict_shape(self):
+        # /v1/discovery?include=crew nests crew as {team, visibleCrews}
+        raw = {"id": "cora", "name": "Cora", "crew": {"team": "deskpoint"}}
+        assert agent_label(raw) == "Cora (deskpoint)"
 
-    def test_empty_choices(self):
-        assert extract_tool_calls({"choices": []}) == []
+    def test_name_only_when_no_crew(self):
+        assert agent_label({"id": "openclaw-openclaw-cora", "name": "Cora"}) == "Cora"
 
-    def test_not_a_dict(self):
-        assert extract_tool_calls("not a dict") == []
+    def test_never_returns_raw_id_when_named(self):
+        label = agent_label({"id": "openclaw-openclaw-cora", "name": "Cora"})
+        assert "openclaw-openclaw-cora" not in label
 
-    def test_no_choices_key(self):
-        assert extract_tool_calls({"other": "data"}) == []
-
-    def test_message_not_dict(self):
-        data = {"choices": [{"message": "string"}]}
-        assert extract_tool_calls(data) == []
-
-    def test_tool_calls_not_list(self):
-        data = {"choices": [{"message": {"tool_calls": "not a list"}}]}
-        assert extract_tool_calls(data) == []
+    def test_id_only_as_last_resort(self):
+        # An agent with no name at all falls back to the id (degenerate case).
+        assert agent_label({"id": "cora"}) == "cora"

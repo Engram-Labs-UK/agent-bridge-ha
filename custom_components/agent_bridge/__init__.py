@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.storage import Store
 
 from .client import BridgeClient
 from .const import (
@@ -25,39 +23,6 @@ from .coordinator import AgentBridgeCoordinator
 from .helpers import resolve_caller_id
 
 _LOGGER = logging.getLogger(__name__)
-
-STORAGE_KEY = f"{DOMAIN}.sessions"
-STORAGE_VERSION = 1
-
-
-class SessionManager:
-    """Manage agent-scoped session IDs persisted to HA Store."""
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
-        self._sessions: dict[str, str] = {}
-
-    async def async_load(self) -> None:
-        """Load sessions from HA Store."""
-        data = await self._store.async_load()
-        if isinstance(data, dict):
-            self._sessions = data.get("sessions", {})
-
-    async def async_save(self) -> None:
-        """Save sessions to HA Store."""
-        await self._store.async_save({"sessions": self._sessions})
-
-    def get_or_create(self, agent_id: str) -> str:
-        """Get existing session ID for an agent, or create a new one."""
-        if agent_id not in self._sessions:
-            random_hex = secrets.token_hex(4)
-            self._sessions[agent_id] = f"agent-{agent_id}-assist_{random_hex}"
-        return self._sessions[agent_id]
-
-    @property
-    def sessions(self) -> dict[str, str]:
-        """Return all sessions."""
-        return dict(self._sessions)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -81,13 +46,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = AgentBridgeCoordinator(hass, client)
     await coordinator.async_config_entry_first_refresh()
 
-    session_manager = SessionManager(hass)
-    await session_manager.async_load()
-
     hass.data[DOMAIN][entry.entry_id] = {
         "client": client,
         "coordinator": coordinator,
-        "session_manager": session_manager,
     }
 
     # The conversation entity platform (in PLATFORMS) creates one
@@ -130,11 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload Agent Bridge config entry."""
-    # Save sessions before unload
     data = hass.data[DOMAIN].get(entry.entry_id, {})
-    session_manager = data.get("session_manager")
-    if isinstance(session_manager, SessionManager):
-        await session_manager.async_save()
 
     # Unregister webhook
     from .webhook import async_unregister_webhook

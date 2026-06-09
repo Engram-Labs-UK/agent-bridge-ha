@@ -109,6 +109,11 @@ class TestAsyncUpdateData:
         data = await coordinator._async_update_data()
         assert data["connected"] is False
         assert data["bridge_status"] == "error"
+        # The hard-error path omits the /v1/health surface; those keys are
+        # NotRequired and consumers must read them via .get() (no KeyError).
+        assert "tool_surface" not in data
+        assert "read_only_safe" not in data
+        assert data.get("tool_surface", "") == ""
 
     @pytest.mark.asyncio
     async def test_cache_survives_3_failures(self, coordinator, mock_client):

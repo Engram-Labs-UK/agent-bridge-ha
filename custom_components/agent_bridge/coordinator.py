@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -17,6 +18,7 @@ from .const import (
     EVENT_AGENT_DISCOVERED,
     EVENT_AGENT_REMOVED,
 )
+from .helpers import agent_crew
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -83,9 +85,10 @@ class CoordinatorData(TypedDict):
     agent_count_total: int
     agents: list[AgentInfo]
     last_poll: str
-    # /v1/health tri-state surface (US0028/AC4); optional -- read via .get().
-    tool_surface: str
-    read_only_safe: bool
+    # /v1/health tri-state surface (US0028/AC4); only set on the success path, so the
+    # hard-error CoordinatorData omits them -- typed NotRequired and read via .get().
+    tool_surface: NotRequired[str]
+    read_only_safe: NotRequired[bool]
 
 
 class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
@@ -151,7 +154,7 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
             effective_model=raw.get("effectiveModel", ""),
             model_provider=raw.get("modelProvider", ""),
             deprecated=raw.get("deprecated", False),
-            crew=raw.get("crew", ""),
+            crew=agent_crew(raw) or "",
         )
 
     def _detect_agent_changes(self, new_agents: list[AgentInfo]) -> None:
@@ -186,8 +189,6 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
 
     async def _async_update_data(self) -> CoordinatorData:
         """Poll the bridge for health and discovery data."""
-        import time
-
         now = time.monotonic()
 
         try:
@@ -206,7 +207,8 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
             # Discovery poll (less frequent)
             agents = self._previous_agents
             if now - self._last_discovery >= self._discovery_interval:
-                raw_agents = await self.client.discover()
+                # include=crew so AgentInfo.crew is populated for entity naming (BG0005)
+                raw_agents = await self.client.discover(include=["crew"])
                 agents = [self._parse_agent(a) for a in raw_agents]
                 self._detect_agent_changes(agents)
                 self._previous_agents = agents

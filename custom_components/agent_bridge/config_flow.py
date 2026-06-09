@@ -28,12 +28,10 @@ from .const import (
     CONF_BRIDGE_URL,
     CONF_CALLER_ID,
     CONF_CONTEXT_MAX_CHARS,
-    CONF_CONTEXT_STRATEGY,
     CONF_CREW,
     CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
     CONF_ENABLE_STREAMING,
-    CONF_ENABLE_TOOL_CALLS,
     CONF_PROMPT,
     CONF_SESSION_IDLE_WINDOW,
     CONF_SSL_VERIFY,
@@ -41,7 +39,6 @@ from .const import (
     CONF_VOICE_AGENT,
     DEFAULT_BRIDGE_URL,
     DEFAULT_CONTEXT_MAX_CHARS,
-    DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_ENABLE_STREAMING,
     DEFAULT_PROMPT,
     DEFAULT_SESSION_IDLE_WINDOW,
@@ -49,17 +46,9 @@ from .const import (
     DOMAIN,
     SUBENTRY_TYPE_CONVERSATION,
 )
-from .helpers import agent_crew, is_selectable_agent, resolve_caller_id
+from .helpers import agent_crew, agent_label, is_selectable_agent, resolve_caller_id
 
 ALL_CREWS = "__all__"
-
-
-def _agent_label(raw: dict[str, Any]) -> str:
-    """Human label for an agent in a picker."""
-    name = raw.get("name", raw["id"])
-    crew = agent_crew(raw)
-    status = raw.get("status", raw.get("health", {}).get("state", "unknown"))
-    return f"{name} ({crew})" if crew else f"{name} ({status})"
 
 
 async def _discover_agents(hass, entry: ConfigEntry) -> list[dict[str, Any]]:
@@ -154,8 +143,6 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
                 options={
                     CONF_CONTEXT_MAX_CHARS: DEFAULT_CONTEXT_MAX_CHARS,
-                    CONF_CONTEXT_STRATEGY: DEFAULT_CONTEXT_STRATEGY,
-                    CONF_ENABLE_TOOL_CALLS: True,
                     CONF_THINKING_TIMEOUT: DEFAULT_THINKING_TIMEOUT,
                     CONF_SSL_VERIFY: True,
                     CONF_DEBUG_LOGGING: False,
@@ -164,9 +151,7 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Only list real, selectable agents -- not models/chatbots/workerbots (CR-0003).
         agent_options = {
-            agent["id"]: _agent_label(agent)
-            for agent in self._agents
-            if is_selectable_agent(agent)
+            agent["id"]: agent_label(agent) for agent in self._agents if is_selectable_agent(agent)
         }
 
         return self.async_show_form(
@@ -277,7 +262,7 @@ class ConversationSubentryFlowHandler(ConfigSubentryFlow):
                 },
             )
 
-        agent_options = {a["id"]: _agent_label(a) for a in agents}
+        agent_options = {a["id"]: agent_label(a) for a in agents}
         schema = vol.Schema({vol.Required(CONF_AGENT_ID): vol.In(agent_options)}).extend(
             _prompt_schema(DEFAULT_PROMPT).schema
         )
@@ -343,14 +328,6 @@ class AgentBridgeOptionsFlow(OptionsFlow):
                         default=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
                     ): vol.All(int, vol.Range(min=1000, max=200000)),
                     vol.Optional(
-                        CONF_CONTEXT_STRATEGY,
-                        default=options.get(CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY),
-                    ): vol.In(["truncate", "clear"]),
-                    vol.Optional(
-                        CONF_ENABLE_TOOL_CALLS,
-                        default=options.get(CONF_ENABLE_TOOL_CALLS, True),
-                    ): bool,
-                    vol.Optional(
                         CONF_THINKING_TIMEOUT,
                         default=options.get(CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT),
                     ): vol.All(int, vol.Range(min=10, max=3600)),
@@ -396,7 +373,7 @@ class AgentBridgeOptionsFlow(OptionsFlow):
             )
             agents = await client.discover()
             # Real, selectable agents only -- not models/chatbots/workerbots (CR-0003).
-            return {a["id"]: _agent_label(a) for a in agents if is_selectable_agent(a)}
+            return {a["id"]: agent_label(a) for a in agents if is_selectable_agent(a)}
         except Exception:
             _LOGGER.warning("Could not discover agents for options flow")
             # Fall back to just the current agent
