@@ -1,10 +1,19 @@
 # Test Strategy Document
 
 > **Project:** Agent Bridge HA
-> **Version:** 0.1.0
-> **Last Updated:** 2026-06-01
+> **Version:** 0.10.0
+> **Last Updated:** 2026-06-09
 > **Owner:** Darren Benson
-> **Last Review:** 2026-06-01 — reconcile + prd/trd/tsd review vs bridge v4.36 + current HA APIs (CR-0002 redesign basis)
+> **Last Review:** 2026-06-09 — RV0006 release-gate review (0.10.0)
+
+> **Currency note (RV0006, 2026-06-09).** Stale vs the current suite; full reconcile
+> tracked in **CR-0011**. Deltas: the tool-execution test objective + `test_tool_executor.py`
+> + `test_init.py` are **removed** (CR-0006 culled the dead HA-side tool loop). New test
+> files not yet in the tree below: `test_diagnostics.py`, `test_openapi_contract.py`
+> (+ `tests/fixtures/bridge_openapi_contract.json`), plus extended `test_client` /
+> `test_coordinator` / `test_sensor` / `test_services` / `test_drift_surface` / `test_helpers`
+> / `test_config_flow`. Every feature shipped this release carries unit tests; CI (ruff +
+> pytest on HA 2026.2.3 / py3.13) is green.
 
 > ⚠️ **Review banner (2026-06-01):** Two strategy gaps surfaced by the CR-0002 audit. **(1)** Several "Done" stories' tests assert **drifted contracts** that no longer match reality — e.g. US0020 AC2/AC3 pin `choices[].delta.content` + the `data:[DONE]` sentinel, but the v4.36 bridge emits `event:message {text}` + `event:done`; mocked-bridge tests pass while the live path is inert. Mocks must be re-pinned to the v4.36 shapes (US0022/US0023). **(2)** There is **no CI matrix against a current HA core** and `ConversationInput` fields are read via `getattr` reflection — the integration drifted v3.1→v4.36 silently. US0029 adds a tested-HA-version pin + CI. The redesign re-platforms onto HA's `ConversationEntity`/`ChatLog`/LLM-API ([CR-0002](change-requests/cr0002.md) / [EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md)); the full TSD module rewrite is tracked by US0030.
 
@@ -371,3 +380,4 @@ tests/
 | 2026-04-05 | Claude | RV0001 review: added continuation detection and broadcast integration test scenarios; promoted entity context build to blocking quality gate; added __init__.py to unit test module table |
 | 2026-04-05 | Claude | TSD review: added tool execution/session/continuation test objectives; added 4 ADR-005 integration scenarios (loop cap, content+tool_calls, batch partial failure, template exposure); added tool_calls fixtures; added HA service registry and HA Store test doubles; added broadcast E2E scenario |
 | 2026-04-05 | Claude | RV0005: test suite implemented -- 188 tests, 90% coverage. 11 test files created. CI/CD pipeline created (.github/workflows/validate.yml) |
+| 2026-06-09 | Claude | RV0006 release-gate review: currency note (top) — tool-execution test objective + `test_tool_executor.py`/`test_init.py` removed (CR-0006); new `test_diagnostics`/`test_openapi_contract` + extended suites for CR-0008..0010 + BG0005. Full test-tree/module-table reconcile tracked in CR-0011. |

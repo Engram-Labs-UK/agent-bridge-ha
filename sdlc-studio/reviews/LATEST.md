@@ -1,9 +1,11 @@
 # Agent Bridge HA — current state (orientation anchor)
 
-> Interim anchor. The authoritative current state is `/sdlc-studio status` plus the
-> specs in `sdlc-studio/`. This file is rewritten by every `/sdlc-studio review`.
+> Most recent review: **RV0006** (release-gate for 0.10.0, 2026-06-09) — see
+> `reviews/RV0006-unified-review-release-gate-0.10.0.md`. This file is rewritten by every
+> `/sdlc-studio review`; authoritative state is `/sdlc-studio status` + the specs.
 
-- **Version:** 0.9.0 manifest (next release ~0.10.0 — see "Merged, unreleased"). Tested against Home Assistant 2026.2.3 / Python 3.13 (`const.TESTED_HA_VERSION`, pinned in CI) and **bridge v4.141.0** (`const.TESTED_BRIDGE_VERSION`, re-baselined CR-0008). CI green per wave.
+- **Version:** **0.10.0** (manifest bumped; RV0006-approved, ready to tag). Tested against Home Assistant 2026.2.3 / Python 3.13 (`const.TESTED_HA_VERSION`, pinned in CI) and **bridge v4.141.0** (`const.TESTED_BRIDGE_VERSION`, re-baselined CR-0008). CI green per wave.
+- **Spec currency:** PRD/TRD/TSD carry RV0006 currency notes; the actively-false tool-loop/options/event claims are corrected. The full spec expansion is tracked in **CR-0011** (docs-only, P3).
 - Reactive path on `ConversationEntity` + `ChatLog` (one entity per agent via config subentries); actuation via the agent's own `/api/mcp` mount (Option A), with deny/confirm list + fail-closed exposure + an `EVENT_ACTUATION_AUDIT` hook. There is **no HA-side tool loop** (CR-0006 removed the dead one; `AGENTS.md` Rule 4 reflects this).
 
 ## Merged, unreleased (autonomous code-health pass, 2026-06-09 — live install still runs 0.9.0)

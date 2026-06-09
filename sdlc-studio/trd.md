@@ -1,11 +1,25 @@
 # Technical Requirements Document
 
 **Project:** Agent Bridge HA
-**Version:** 0.1.0
+**Version:** 0.10.0
 **Status:** Draft
-**Last Updated:** 2026-06-01
-**Last Review:** 2026-06-01 — reconcile + prd/trd/tsd review vs bridge v4.36 + current HA APIs (CR-0002 redesign basis)
+**Last Updated:** 2026-06-09
+**Last Review:** 2026-06-09 — RV0006 release-gate review (0.10.0)
 **PRD Reference:** [PRD](prd.md)
+
+> **Currency note (RV0006, 2026-06-09).** This TRD predates the CR-0006..CR-0010 pass;
+> several sections are stale. Authoritative deltas, until the full reconcile (tracked in
+> **CR-0011**):
+> - **No HA-side tool loop.** The §4 tool-execution flow and **ADR-005** are SUPERSEDED —
+>   the agent actuates via its own `/api/mcp` mount (Option A, US0027/US0031);
+>   `tool_executor.py` does not exist.
+> - **New client methods / endpoints:** `agent_usage` (`GET /v1/agents/{id}/usage`),
+>   `doctor` (`GET /v1/doctor`), `memory_record`/`memory_recall` (`POST`/`GET /v1/agents/{id}/memory`).
+> - **CoordinatorData** gained `NotRequired` `tool_surface`, `read_only_safe`, `usage`, `doctor`;
+>   discovery uses `include=crew`.
+> - **New platforms/modules:** `ai_task.py`, `diagnostics.py`, `drift.py` (+ a `fleet_doctor`
+>   repair issue), `webhook.py`. `tool_executor.py` removed.
+> - **Tested bridge baseline:** `4.141.0` (was 4.36).
 
 > ⚠️ **Review banner (2026-06-01):** This TRD targets **Agent Bridge v3.1.0+** and HA's legacy conversation API; both have drifted. A verified audit (CR-0002) found: **(a)** the reactive `tool_calls` actuation loop is inert — neither HA nor the **v4.36** bridge carries a `tool_calls` contract; **(b)** the component is on HA's legacy `AbstractConversationAgent`/`async_set_agent`, not `ConversationEntity`/`ChatLog`/LLM-API; **(c)** request/response shapes drifted: `/v1/tools/invoke` (`agent`/`tool`, not `agent_id`/`tool_name`), `/v1/broadcast` (`messages[]`+`tags`, responses-object), SSE (`event:message {text}` + `event:done`, **not** `choices[].delta`/`[DONE]`), webhook health (`{agentId,healthy}`). The redesign + the full TRD rewrite to the v4.36/ConversationEntity model are **[CR-0002](change-requests/cr0002.md)** / **[EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md)** (rewrite tracked by **US0030**). Sections below are the **v0.1 record**; the two clear factual errors are corrected inline this pass.
 
@@ -766,7 +780,11 @@ User-facing strings for the config flow and options flow:
 
 ### ADR-005: Tool Execution Architecture
 
-**Status:** Accepted
+**Status:** SUPERSEDED (EP0007 / CR-0006, 2026-06-09) — the HA-side tool-execution loop
+described here was removed. The agent actuates Home Assistant through its **own
+`/api/mcp` mount** (Option A, US0027/US0031); this integration runs no tool loop and
+parses no `tool_calls`. Retained for the historical record. A formal ADR for the
+agent-owned actuation boundary is tracked in CR-0011.
 
 **Context:** When an agent returns `tool_calls` in a chat completion response, the integration must execute HA services and return results. This involves several non-obvious design choices: how many iterations to allow, how to handle batch calls, what to do when the response contains both text content and tool_calls, and how to report failures.
 
@@ -838,3 +856,4 @@ Tool failures (entity not found, service timeout, invalid domain) are returned a
 | 2026-04-05 | 0.1.1 | RV0001 review: added Session Manager, Continuation Detector, Voice Debug Logger to component table; added SSE Streaming architecture; specified const.py, services.yaml, strings.json contents; noted shallow/deep health response shape difference |
 | 2026-04-05 | 0.1.2 | TRD review: fixed /v1/discovery auth, added tool executor rules, manifest.json spec, missing test files, resolved open questions, fixed hacs.json, documented status→bool mapping |
 | 2026-04-05 | 0.1.3 | Resolved all open questions (Q1: session-per-agent, Q2: expose all entity types as-is). Added ADR-005: Tool Execution Architecture (loop cap, content+tool_calls, parallel batch, JSON error format) |
+| 2026-06-09 | 0.10.0 | RV0006 release-gate review: added a currency note (top) with the post-CR-0006..0010 deltas; marked ADR-005 + §4 tool-execution SUPERSEDED (agent-owned `/api/mcp` actuation). Full interface/endpoint/module reconcile tracked in CR-0011. |
