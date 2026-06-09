@@ -29,10 +29,11 @@ def _doctor_issue_id(entry: ConfigEntry) -> str:
     return f"fleet_doctor_{entry.entry_id}"
 
 
-# Fleet-doctor verdict -> HA repair severity (CR-0009). HEALTHY (and anything
-# unrecognised) raises no issue.
+# Fleet-doctor verdict -> HA repair severity (CR-0009). Only CRITICAL raises a
+# persistent repair issue (the home's agents genuinely cannot function). WARNING is
+# advisory (e.g. an idle/quiet fleet) -- it stays in the diagnostics download + the
+# doctor coordinator data, not a repair notification (BG0011). HEALTHY/unknown: none.
 _VERDICT_SEVERITY = {
-    "WARNING": ir.IssueSeverity.WARNING,
     "CRITICAL": ir.IssueSeverity.ERROR,
 }
 

@@ -7,10 +7,10 @@
 | Status | Count |
 |--------|-------|
 | Open | 0 |
-| Fixed | 10 |
+| Fixed | 11 |
 | In Progress | 0 |
 | Closed | 0 |
-| **Total** | **10** |
+| **Total** | **11** |
 
 ## Bugs
 
@@ -26,6 +26,7 @@
 | [BG0008](BG0008-coordinator-emits-observability-by-reference.md) | Coordinator emits usage/doctor by reference (aliasing hazard) | Low | P3 | Fixed | coordinator/sensor |
 | [BG0009](BG0009-first-run-picker-lost-status-label.md) | First-run agent picker lost its health/crew label (BG0005 regression) | Low | P3 | Fixed | config_flow.py |
 | [BG0010](BG0010-brand-icon-wrong-location.md) | Brand icon in wrong location — "icon not available" (needs `brand/` subdir, HA 2026.3+) | Low | P3 | Fixed | brand assets |
+| [BG0011](BG0011-fleet-doctor-warning-too-noisy.md) | Fleet-doctor repair too noisy — persistent warning for a benign idle fleet | Medium | P2 | Fixed | drift.py |
 
 ## Notes
 
