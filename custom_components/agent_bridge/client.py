@@ -223,6 +223,22 @@ class BridgeClient:
         """
         return await self._request("GET", "/v1/agent-context")
 
+    async def agent_usage(self, agent_id: str) -> dict[str, Any]:
+        """Get ``/v1/agents/{id}/usage`` -- per-agent token + cost telemetry (CR-0009).
+
+        Typed surface (bridge v4.x): ``totals`` (``totalIn``/``totalOut``/``turnCount``),
+        ``estimatedTotalCostGBP``, ``perModel``/``perChannel`` arrays, and a ``range``.
+        """
+        return await self._request("GET", f"/v1/agents/{agent_id}/usage")
+
+    async def doctor(self) -> dict[str, Any]:
+        """Get ``/v1/doctor`` -- one-call fleet diagnosis (CR-0009).
+
+        Returns ``verdict`` (HEALTHY/WARNING/CRITICAL), ``summary``, ``findings``
+        (``severity``/``area``/``detail``) and ``recommendations``.
+        """
+        return await self._request("GET", "/v1/doctor")
+
     async def chat(
         self,
         messages: list[dict[str, Any]],

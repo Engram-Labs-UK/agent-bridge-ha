@@ -14,7 +14,10 @@ from custom_components.agent_bridge.coordinator import (
     AgentBridgeCoordinator,
     _map_tristate,
 )
-from custom_components.agent_bridge.drift import async_check_agent_context_drift
+from custom_components.agent_bridge.drift import (
+    async_check_agent_context_drift,
+    async_check_doctor_verdict,
+)
 
 
 def _mock_response(json_data):
@@ -35,9 +38,7 @@ class TestCallerHeader:
     @pytest.mark.asyncio
     async def test_caller_header_present_on_discover(self):
         session = MagicMock(spec=aiohttp.ClientSession)
-        client = BridgeClient(
-            session, "http://b:18780", "tok", caller_id="homeassistant"
-        )
+        client = BridgeClient(session, "http://b:18780", "tok", caller_id="homeassistant")
         session.request = MagicMock(return_value=_mock_response({"agents": []}))
         await client.discover()
         headers = session.request.call_args.kwargs["headers"]
@@ -110,10 +111,7 @@ class TestVoiceCapableGating:
         assert _is_voice_capable({"identity_substrate": "none"}) is False
 
     def test_full_agent_allowed(self):
-        assert (
-            _is_voice_capable({"agent_class": "agent", "identity_substrate": "persona"})
-            is True
-        )
+        assert _is_voice_capable({"agent_class": "agent", "identity_substrate": "persona"}) is True
 
     def test_unknown_allowed_for_backcompat(self):
         assert _is_voice_capable(None) is True
@@ -173,9 +171,7 @@ class TestDriftRepairIssue:
         from homeassistant.helpers import issue_registry as ir
 
         client = MagicMock()
-        client.agent_context = AsyncMock(
-            return_value={"version": "99.0.0", "deprecations": []}
-        )
+        client.agent_context = AsyncMock(return_value={"version": "99.0.0", "deprecations": []})
         entry = MagicMock()
         entry.entry_id = "entry_2"
         hass.data.setdefault(DOMAIN, {})["entry_2"] = {"client": client}
@@ -199,3 +195,56 @@ class TestDriftRepairIssue:
         assert await async_check_agent_context_drift(hass, entry) is False
         reg = ir.async_get(hass)
         assert reg.async_get_issue(DOMAIN, "bridge_drift_entry_3") is None
+
+
+class TestDoctorRepairIssue:
+    """CR-0009: the fleet-doctor verdict raises/clears an HA repair issue."""
+
+    @staticmethod
+    def _entry_with_doctor(hass, entry_id, doctor):
+        coordinator = MagicMock()
+        coordinator.data = {"doctor": doctor}
+        entry = MagicMock()
+        entry.entry_id = entry_id
+        hass.data.setdefault(DOMAIN, {})[entry_id] = {"coordinator": coordinator}
+        return entry
+
+    @pytest.mark.asyncio
+    async def test_critical_raises_error_issue(self, hass):
+        from homeassistant.helpers import issue_registry as ir
+
+        entry = self._entry_with_doctor(
+            hass,
+            "doc_1",
+            {
+                "verdict": "CRITICAL",
+                "findings": [{"severity": "critical", "area": "providers", "detail": "no key"}],
+            },
+        )
+        async_check_doctor_verdict(hass, entry)
+        issue = ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_1")
+        assert issue is not None
+        assert issue.severity == ir.IssueSeverity.ERROR
+
+    @pytest.mark.asyncio
+    async def test_warning_raises_warning_issue(self, hass):
+        from homeassistant.helpers import issue_registry as ir
+
+        entry = self._entry_with_doctor(hass, "doc_2", {"verdict": "WARNING", "findings": []})
+        async_check_doctor_verdict(hass, entry)
+        issue = ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_2")
+        assert issue is not None
+        assert issue.severity == ir.IssueSeverity.WARNING
+
+    @pytest.mark.asyncio
+    async def test_healthy_clears_issue(self, hass):
+        from homeassistant.helpers import issue_registry as ir
+
+        # raise, then clear with a HEALTHY verdict on the same entry
+        entry = self._entry_with_doctor(hass, "doc_3", {"verdict": "CRITICAL", "findings": []})
+        async_check_doctor_verdict(hass, entry)
+        assert ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_3") is not None
+
+        hass.data[DOMAIN]["doc_3"]["coordinator"].data = {"doctor": {"verdict": "HEALTHY"}}
+        async_check_doctor_verdict(hass, entry)
+        assert ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_3") is None
