@@ -14,7 +14,7 @@ from homeassistant.config_entries import (
     SubentryFlowResult,
 )
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.data_entry_flow import FlowResult, section
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     TextSelector,
@@ -49,6 +49,10 @@ from .const import (
 from .helpers import agent_crew, agent_label, is_selectable_agent, resolve_caller_id
 
 ALL_CREWS = "__all__"
+
+# Collapsible "Advanced" section in the options form (CR-0007). Stored options stay
+# flat -- the section is flattened back to top level on submit for back-compat.
+ADVANCED_SECTION = "advanced"
 
 
 async def _discover_agents(hass, entry: ConfigEntry) -> list[dict[str, Any]]:
@@ -296,18 +300,22 @@ class AgentBridgeOptionsFlow(OptionsFlow):
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage the options."""
+        """Manage the options (CR-0007: essentials + a collapsed Advanced section)."""
         if user_input is not None:
+            # Flatten the Advanced section back to the top level so stored options
+            # stay flat (back-compat with every entry.options.get(...) reader).
+            advanced = user_input.pop(ADVANCED_SECTION, {})
+            merged = {**user_input, **advanced}
+
             # Agent selection lives in entry.data, not options.
-            # Extract it and update data separately.
-            new_agent = user_input.pop(CONF_DEFAULT_AGENT, None)
+            new_agent = merged.pop(CONF_DEFAULT_AGENT, None)
             if new_agent:
                 new_data = {**self._config_entry.data}
                 new_data[CONF_DEFAULT_AGENT] = new_agent
                 new_data[CONF_VOICE_AGENT] = new_agent
                 self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
 
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(title="", data=merged)
 
         # Discover current agents from bridge for the dropdown
         agent_options = await self._get_agent_options()
@@ -315,47 +323,59 @@ class AgentBridgeOptionsFlow(OptionsFlow):
         options = self._config_entry.options
         current_agent = self._config_entry.data.get(CONF_DEFAULT_AGENT, "")
 
+        # Essentials: pick the agent + the one transport toggle most installs touch.
+        essentials = {
+            vol.Required(
+                CONF_DEFAULT_AGENT,
+                default=current_agent,
+            ): vol.In(agent_options) if agent_options else str,
+            vol.Optional(
+                CONF_SSL_VERIFY,
+                default=options.get(CONF_SSL_VERIFY, True),
+            ): bool,
+        }
+
+        # Advanced: tuning that has sane defaults; collapsed by default.
+        advanced_schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_CONTEXT_MAX_CHARS,
+                    default=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
+                ): vol.All(int, vol.Range(min=1000, max=200000)),
+                vol.Optional(
+                    CONF_THINKING_TIMEOUT,
+                    default=options.get(CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT),
+                ): vol.All(int, vol.Range(min=10, max=3600)),
+                # US0032: idle gap (s) that rotates the session channel key.
+                # 0 = rotate every turn (no continuity); 86400 = bridge TTL cap.
+                vol.Optional(
+                    CONF_SESSION_IDLE_WINDOW,
+                    default=options.get(CONF_SESSION_IDLE_WINDOW, DEFAULT_SESSION_IDLE_WINDOW),
+                ): vol.All(int, vol.Range(min=0, max=86400)),
+                # US0033: opt-in response streaming to TTS (experimental).
+                vol.Optional(
+                    CONF_ENABLE_STREAMING,
+                    default=options.get(CONF_ENABLE_STREAMING, DEFAULT_ENABLE_STREAMING),
+                ): bool,
+                vol.Optional(
+                    CONF_DEBUG_LOGGING,
+                    default=options.get(CONF_DEBUG_LOGGING, False),
+                ): bool,
+                # BG0004: the bridge requires a registered agent id as the caller.
+                # Blank falls back to the selected agent (always registered).
+                vol.Optional(
+                    CONF_CALLER_ID,
+                    default=options.get(CONF_CALLER_ID, ""),
+                ): str,
+            }
+        )
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_DEFAULT_AGENT,
-                        default=current_agent,
-                    ): vol.In(agent_options) if agent_options else str,
-                    vol.Optional(
-                        CONF_CONTEXT_MAX_CHARS,
-                        default=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
-                    ): vol.All(int, vol.Range(min=1000, max=200000)),
-                    vol.Optional(
-                        CONF_THINKING_TIMEOUT,
-                        default=options.get(CONF_THINKING_TIMEOUT, DEFAULT_THINKING_TIMEOUT),
-                    ): vol.All(int, vol.Range(min=10, max=3600)),
-                    # US0032: idle gap (s) that rotates the session channel key.
-                    # 0 = rotate every turn (no continuity); 86400 = bridge TTL cap.
-                    vol.Optional(
-                        CONF_SESSION_IDLE_WINDOW,
-                        default=options.get(CONF_SESSION_IDLE_WINDOW, DEFAULT_SESSION_IDLE_WINDOW),
-                    ): vol.All(int, vol.Range(min=0, max=86400)),
-                    # US0033: opt-in response streaming to TTS (experimental).
-                    vol.Optional(
-                        CONF_ENABLE_STREAMING,
-                        default=options.get(CONF_ENABLE_STREAMING, DEFAULT_ENABLE_STREAMING),
-                    ): bool,
-                    vol.Optional(
-                        CONF_SSL_VERIFY,
-                        default=options.get(CONF_SSL_VERIFY, True),
-                    ): bool,
-                    vol.Optional(
-                        CONF_DEBUG_LOGGING,
-                        default=options.get(CONF_DEBUG_LOGGING, False),
-                    ): bool,
-                    # BG0004: the bridge requires a registered agent id as the caller.
-                    # Blank falls back to the selected agent (always registered).
-                    vol.Optional(
-                        CONF_CALLER_ID,
-                        default=options.get(CONF_CALLER_ID, ""),
-                    ): str,
+                    **essentials,
+                    vol.Required(ADVANCED_SECTION): section(advanced_schema, {"collapsed": True}),
                 }
             ),
         )

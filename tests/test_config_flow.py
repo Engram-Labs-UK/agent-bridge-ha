@@ -178,17 +178,62 @@ class TestOptionsFlow:
         assert result["type"] == "form"
 
     @pytest.mark.asyncio
-    async def test_saves_options(self):
+    async def test_saves_options_flattens_advanced(self):
+        # CR-0007: the Advanced section is flattened back to a flat options dict,
+        # and the agent selection is moved to entry.data (not options).
         entry = MagicMock()
         entry.options = {}
+        entry.data = {}
         flow = AgentBridgeOptionsFlow(entry)
         flow.hass = MagicMock()
 
         with patch.object(
             AgentBridgeOptionsFlow, "_get_agent_options",
-            AsyncMock(return_value={"cora": "Cora (healthy)"}),
+            AsyncMock(return_value={"cora": "Cora (deskpoint)"}),
         ):
             result = await flow.async_step_init(
-                {"context_max_chars": 20000, "enable_tool_calls": False}
+                {
+                    "default_agent": "cora",
+                    "ssl_verify": True,
+                    "advanced": {"context_max_chars": 20000, "thinking_timeout": 90},
+                }
             )
         assert result["type"] == "create_entry"
+        data = result["data"]
+        # advanced fields flattened to the top level
+        assert data["context_max_chars"] == 20000
+        assert data["thinking_timeout"] == 90
+        assert data["ssl_verify"] is True
+        # the section wrapper and the agent key never leak into stored options
+        assert "advanced" not in data
+        assert "default_agent" not in data
+
+
+class TestOptionsTranslations:
+    """CR-0007: every option field has a human label and the two files agree."""
+
+    @staticmethod
+    def _load(name):
+        import json
+        import pathlib
+
+        base = pathlib.Path("custom_components/agent_bridge")
+        return json.loads((base / name).read_text())
+
+    def test_strings_and_en_parity(self):
+        assert self._load("strings.json")["options"] == self._load("translations/en.json")["options"]
+
+    def test_every_option_field_has_a_label(self):
+        init = self._load("strings.json")["options"]["step"]["init"]
+        labels = set(init["data"]) | set(init["sections"]["advanced"]["data"])
+        expected = {
+            "default_agent",
+            "ssl_verify",
+            "context_max_chars",
+            "thinking_timeout",
+            "session_idle_window",
+            "enable_streaming",
+            "debug_logging",
+            "caller_id",
+        }
+        assert expected <= labels
