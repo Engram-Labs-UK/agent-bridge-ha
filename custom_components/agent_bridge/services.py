@@ -17,7 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 
 from .client import BridgeClient, BridgeError
-from .const import DOMAIN
+from .const import CONF_DEFAULT_AGENT, DOMAIN
 from .coordinator import AgentBridgeCoordinator
 from .helpers import extract_response_text
 
@@ -28,6 +28,8 @@ SERVICE_INVOKE_TOOL = "invoke_tool"
 SERVICE_BROADCAST = "broadcast"
 SERVICE_ASK_WITH_IMAGE = "ask_with_image"
 SERVICE_ANNOUNCE = "announce"
+SERVICE_MEMORY_RECORD = "memory_record"
+SERVICE_MEMORY_RECALL = "memory_recall"
 
 SEND_MESSAGE_SCHEMA = vol.Schema(
     {
@@ -69,6 +71,21 @@ ANNOUNCE_SCHEMA = vol.Schema(
     }
 )
 
+MEMORY_RECORD_SCHEMA = vol.Schema(
+    {
+        vol.Required("content"): cv.string,
+        vol.Optional("agent_id"): cv.string,
+        vol.Optional("tags"): vol.All(cv.ensure_list, [cv.string]),
+    }
+)
+
+MEMORY_RECALL_SCHEMA = vol.Schema(
+    {
+        vol.Optional("query"): cv.string,
+        vol.Optional("agent_id"): cv.string,
+    }
+)
+
 
 def _get_entry_data(hass: HomeAssistant) -> dict[str, Any]:
     """Get the first config entry's runtime data."""
@@ -86,6 +103,14 @@ def _validate_agent_id(coordinator: AgentBridgeCoordinator, agent_id: str) -> No
     known_ids = {a["id"] for a in coordinator.data["agents"]}
     if agent_id not in known_ids:
         raise ValueError(f"Unknown agent: {agent_id}")
+
+
+def _default_agent(hass: HomeAssistant) -> str | None:
+    """The configured default agent id, used when a service omits ``agent_id``."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if entries:
+        return entries[0].data.get(CONF_DEFAULT_AGENT)
+    return None
 
 
 async def async_handle_send_message(call: ServiceCall) -> ServiceResponse:
@@ -238,6 +263,49 @@ async def async_handle_announce(call: ServiceCall) -> ServiceResponse:
     return {"announced": True, "target": target, "priority": priority}
 
 
+async def async_handle_memory_record(call: ServiceCall) -> ServiceResponse:
+    """Record a memory item for an agent (CR-0010)."""
+    hass = call.hass
+    data = _get_entry_data(hass)
+    client: BridgeClient = data["client"]
+    coordinator: AgentBridgeCoordinator = data["coordinator"]
+
+    explicit = call.data.get("agent_id")
+    if explicit:
+        _validate_agent_id(coordinator, explicit)
+    agent_id = explicit or _default_agent(hass)
+    if not agent_id:
+        return {"recorded": False, "error": "no agent specified and no default agent configured"}
+
+    try:
+        await client.memory_record(agent_id, call.data["content"], tags=call.data.get("tags"))
+        return {"recorded": True, "agent_id": agent_id}
+    except BridgeError as err:
+        return {"recorded": False, "agent_id": agent_id, "error": str(err)}
+
+
+async def async_handle_memory_recall(call: ServiceCall) -> ServiceResponse:
+    """Recall an agent's memory items (CR-0010)."""
+    hass = call.hass
+    data = _get_entry_data(hass)
+    client: BridgeClient = data["client"]
+    coordinator: AgentBridgeCoordinator = data["coordinator"]
+
+    explicit = call.data.get("agent_id")
+    if explicit:
+        _validate_agent_id(coordinator, explicit)
+    agent_id = explicit or _default_agent(hass)
+    if not agent_id:
+        return {"items": [], "error": "no agent specified and no default agent configured"}
+
+    try:
+        response = await client.memory_recall(agent_id, query=call.data.get("query"))
+        items = response.get("items") if isinstance(response, dict) else None
+        return {"items": items if isinstance(items, list) else [], "agent_id": agent_id}
+    except BridgeError as err:
+        return {"items": [], "agent_id": agent_id, "error": str(err)}
+
+
 def _normalise_broadcast_responses(raw: Any) -> list[dict[str, Any]]:
     """Normalise the v4.36 broadcast ``responses`` object into a list.
 
@@ -321,6 +389,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
 
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MEMORY_RECORD,
+        async_handle_memory_record,
+        schema=MEMORY_RECORD_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_MEMORY_RECALL,
+        async_handle_memory_recall,
+        schema=MEMORY_RECALL_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
 
 async def async_unload_services(hass: HomeAssistant) -> None:
     """Unregister Agent Bridge services."""
@@ -329,3 +413,5 @@ async def async_unload_services(hass: HomeAssistant) -> None:
     hass.services.async_remove(DOMAIN, SERVICE_BROADCAST)
     hass.services.async_remove(DOMAIN, SERVICE_ASK_WITH_IMAGE)
     hass.services.async_remove(DOMAIN, SERVICE_ANNOUNCE)
+    hass.services.async_remove(DOMAIN, SERVICE_MEMORY_RECORD)
+    hass.services.async_remove(DOMAIN, SERVICE_MEMORY_RECALL)
