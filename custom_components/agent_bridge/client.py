@@ -239,6 +239,42 @@ class BridgeClient:
         """
         return await self._request("GET", "/v1/doctor")
 
+    async def memory_record(
+        self,
+        agent_id: str,
+        content: str,
+        *,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Record a memory item for an agent (CR-0010).
+
+        ``POST /v1/agents/{id}/memory`` -- the documented request field is
+        ``content``; ``tags`` is sent when supplied (the bridge accepts extra
+        fields). Returns the bridge's (untyped) acknowledgement.
+        """
+        body: dict[str, Any] = {"content": content}
+        if tags:
+            body["tags"] = tags
+        return await self._request("POST", f"/v1/agents/{agent_id}/memory", json=body)
+
+    async def memory_recall(
+        self,
+        agent_id: str,
+        query: str | None = None,
+    ) -> dict[str, Any]:
+        """Recall memory items for an agent (CR-0010).
+
+        ``GET /v1/agents/{id}/memory`` -> ``{agent, items}``. ``query`` is passed
+        as ``?q=`` best-effort (the param is not in the OpenAPI; an unsupported
+        bridge simply returns all items).
+        """
+        path = f"/v1/agents/{agent_id}/memory"
+        if query:
+            from urllib.parse import quote
+
+            path = f"{path}?q={quote(query)}"
+        return await self._request("GET", path)
+
     async def chat(
         self,
         messages: list[dict[str, Any]],

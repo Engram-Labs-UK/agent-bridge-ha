@@ -6,9 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.agent_bridge.const import DOMAIN
+from custom_components.agent_bridge.const import CONF_DEFAULT_AGENT, DOMAIN
 from custom_components.agent_bridge.services import (
     _get_entry_data,
+    async_handle_memory_recall,
+    async_handle_memory_record,
     _validate_agent_id,
     async_handle_announce,
     async_handle_ask_with_image,
@@ -238,3 +240,70 @@ class TestInvokeTool:
 
         with pytest.raises(ValueError, match="Unknown agent"):
             await async_handle_invoke_tool(call)
+
+
+class TestMemoryServices:
+    """CR-0010: memory_record / memory_recall services."""
+
+    @pytest.mark.asyncio
+    async def test_record_with_explicit_agent(self, mock_hass):
+        client = _get_entry_data(mock_hass)["client"]
+        client.memory_record = AsyncMock(return_value={})
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"content": "the back door sticks", "agent_id": "cora", "tags": ["home"]}
+
+        result = await async_handle_memory_record(call)
+        assert result == {"recorded": True, "agent_id": "cora"}
+        client.memory_record.assert_awaited_once_with(
+            "cora", "the back door sticks", tags=["home"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_record_defaults_to_configured_agent(self, mock_hass):
+        client = _get_entry_data(mock_hass)["client"]
+        client.memory_record = AsyncMock(return_value={})
+        mock_hass.config_entries.async_entries.return_value = [
+            MagicMock(data={CONF_DEFAULT_AGENT: "cora"})
+        ]
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"content": "bins go out Tuesday"}
+
+        result = await async_handle_memory_record(call)
+        assert result["recorded"] is True
+        assert result["agent_id"] == "cora"
+
+    @pytest.mark.asyncio
+    async def test_recall_normalises_items(self, mock_hass):
+        client = _get_entry_data(mock_hass)["client"]
+        client.memory_recall = AsyncMock(
+            return_value={"agent": "cora", "items": [{"content": "x"}]}
+        )
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"agent_id": "cora", "query": "door"}
+
+        result = await async_handle_memory_recall(call)
+        assert result["agent_id"] == "cora"
+        assert result["items"] == [{"content": "x"}]
+        client.memory_recall.assert_awaited_once_with("cora", query="door")
+
+    @pytest.mark.asyncio
+    async def test_recall_handles_untyped_response(self, mock_hass):
+        client = _get_entry_data(mock_hass)["client"]
+        client.memory_recall = AsyncMock(return_value={})  # no items key
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"agent_id": "cora"}
+
+        result = await async_handle_memory_recall(call)
+        assert result["items"] == []
+
+    @pytest.mark.asyncio
+    async def test_record_rejects_unknown_agent(self, mock_hass):
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"content": "x", "agent_id": "ghost"}
+        with pytest.raises(ValueError, match="Unknown agent"):
+            await async_handle_memory_record(call)

@@ -7,9 +7,9 @@
 
 | Status | Count |
 | --- | --- |
-| Proposed | 2 |
+| Proposed | 1 |
 | Review | 2 |
-| Implemented | 6 |
+| Implemented | 7 |
 | Rejected | 0 |
 | Deferred | 0 |
 | **Total** | **10** |
@@ -19,7 +19,7 @@
 | Priority | Proposed | Review | Implemented |
 | --- | --- | --- | --- |
 | P1 | 1 | 1 | 1 |
-| P2 | 1 | 1 | 4 |
+| P2 | 0 | 1 | 5 |
 | P3 | 0 | 0 | 1 |
 | P4 | 0 | 0 | 0 |
 
@@ -36,7 +36,7 @@
 | [CR-0007](cr0007.md) | Options-flow usability restructure | P2 | Implemented | production-feedback | — | 2026-06-09 |
 | [CR-0008](cr0008.md) | Re-baseline to bridge v4.141 + capability audit | P1 | Implemented | spec-gap | — | 2026-06-09 |
 | [CR-0009](cr0009.md) | Surface bridge usage/cost and fleet doctor in HA | P2 | Implemented | feature-request | — | 2026-06-09 |
-| [CR-0010](cr0010.md) | Agent memory record/recall from Home Assistant | P2 | Proposed | feature-request | — | 2026-06-09 |
+| [CR-0010](cr0010.md) | Agent memory record/recall from Home Assistant | P2 | Implemented | feature-request | — | 2026-06-09 |
 
 ## Dependencies
 

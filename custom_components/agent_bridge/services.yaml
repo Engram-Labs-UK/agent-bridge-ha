@@ -129,3 +129,48 @@ announce:
             - low
             - normal
             - critical
+
+memory_record:
+  name: Record memory
+  description: Store a memory item for a bridge agent so it persists across conversations.
+  fields:
+    content:
+      name: Content
+      description: The fact or note to remember.
+      required: true
+      example: "The back door sticks in wet weather."
+      selector:
+        text:
+          multiline: true
+    agent_id:
+      name: Agent ID
+      description: The agent to store the memory for. Defaults to the configured default agent.
+      required: false
+      example: "cora"
+      selector:
+        text:
+    tags:
+      name: Tags
+      description: Optional list of tags to file the memory under.
+      required: false
+      selector:
+        object:
+
+memory_recall:
+  name: Recall memory
+  description: Retrieve an agent's stored memory items, optionally filtered by a query.
+  fields:
+    query:
+      name: Query
+      description: Optional search text to narrow the recall.
+      required: false
+      example: "back door"
+      selector:
+        text:
+    agent_id:
+      name: Agent ID
+      description: The agent to recall from. Defaults to the configured default agent.
+      required: false
+      example: "cora"
+      selector:
+        text:
