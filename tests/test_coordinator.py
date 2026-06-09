@@ -13,7 +13,12 @@ from custom_components.agent_bridge.coordinator import (
     CoordinatorData,
 )
 
-from .conftest import DISCOVERY_THREE_AGENTS, HEALTH_SHALLOW_OK
+from .conftest import (
+    DISCOVERY_THREE_AGENTS,
+    DOCTOR_HEALTHY,
+    HEALTH_SHALLOW_OK,
+    USAGE_SUMMARY,
+)
 
 
 @pytest.fixture
@@ -28,6 +33,8 @@ def mock_client():
     client = MagicMock()
     client.health = AsyncMock(return_value=HEALTH_SHALLOW_OK)
     client.discover = AsyncMock(return_value=DISCOVERY_THREE_AGENTS)
+    client.agent_usage = AsyncMock(return_value=USAGE_SUMMARY)
+    client.doctor = AsyncMock(return_value=DOCTOR_HEALTHY)
     return client
 
 
