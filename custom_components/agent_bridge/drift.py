@@ -12,7 +12,7 @@ import logging
 
 from awesomeversion import AwesomeVersion, AwesomeVersionException
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
 from .client import BridgeError
@@ -23,6 +23,53 @@ _LOGGER = logging.getLogger(__name__)
 
 def _issue_id(entry: ConfigEntry) -> str:
     return f"bridge_drift_{entry.entry_id}"
+
+
+def _doctor_issue_id(entry: ConfigEntry) -> str:
+    return f"fleet_doctor_{entry.entry_id}"
+
+
+# Fleet-doctor verdict -> HA repair severity (CR-0009). HEALTHY (and anything
+# unrecognised) raises no issue.
+_VERDICT_SEVERITY = {
+    "WARNING": ir.IssueSeverity.WARNING,
+    "CRITICAL": ir.IssueSeverity.ERROR,
+}
+
+
+@callback
+def async_check_doctor_verdict(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Raise/clear a repair issue from the coordinator's fleet-doctor verdict (CR-0009).
+
+    Reads the doctor payload already cached on the coordinator (no I/O), so this is a
+    cheap synchronous listener fired on each coordinator update.
+    """
+    data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    coordinator = data.get("coordinator")
+    doctor = (coordinator.data or {}).get("doctor", {}) if coordinator else {}
+
+    verdict = str(doctor.get("verdict", "")).upper()
+    severity = _VERDICT_SEVERITY.get(verdict)
+    if severity is None:
+        ir.async_delete_issue(hass, DOMAIN, _doctor_issue_id(entry))
+        return
+
+    findings = doctor.get("findings") or []
+    summary = (
+        "; ".join(
+            f"{f.get('area')}: {f.get('detail')}" for f in findings[:5] if isinstance(f, dict)
+        )
+        or "see the bridge doctor for detail"
+    )
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        _doctor_issue_id(entry),
+        is_fixable=False,
+        severity=severity,
+        translation_key="fleet_doctor",
+        translation_placeholders={"verdict": verdict, "findings": summary},
+    )
 
 
 def _is_newer(live: str, baseline: str) -> bool:

@@ -8,7 +8,9 @@ import pytest
 
 from custom_components.agent_bridge.const import DOMAIN
 from custom_components.agent_bridge.sensor import (
+    AgentCostSensor,
     AgentCountSensor,
+    AgentTokensSensor,
     BridgeStatusSensor,
     _device_info,
 )
@@ -38,7 +40,6 @@ def mock_entry():
 
 
 class TestBridgeStatusSensor:
-
     def test_native_value(self, mock_coordinator, mock_entry):
         sensor = BridgeStatusSensor(mock_coordinator, mock_entry)
         assert sensor.native_value == "ok"
@@ -82,7 +83,6 @@ class TestBridgeStatusSensor:
 
 
 class TestAgentCountSensor:
-
     def test_native_value(self, mock_coordinator, mock_entry):
         sensor = AgentCountSensor(mock_coordinator, mock_entry)
         assert sensor.native_value == 3
@@ -104,8 +104,42 @@ class TestAgentCountSensor:
 
 
 class TestDeviceInfo:
-
     def test_device_info_structure(self, mock_entry):
         info = _device_info(mock_entry)
         assert (DOMAIN, "test_entry") in info["identifiers"]
         assert info["name"] == "Agent Bridge"
+
+
+class TestAgentUsageSensors:
+    """CR-0009: per-agent token + cost sensors."""
+
+    @staticmethod
+    def _coord(usage):
+        coord = MagicMock()
+        coord.data = {"usage": usage, "agents": []}
+        return coord
+
+    def test_tokens_sum_in_and_out(self, mock_entry):
+        coord = self._coord({"cora": {"totals": {"totalIn": 100, "totalOut": 40, "turnCount": 5}}})
+        s = AgentTokensSensor(coord, mock_entry, "cora", "Cora (deskpoint)", None)
+        assert s.native_value == 140
+        assert s.extra_state_attributes["turns"] == 5
+
+    def test_tokens_none_when_no_usage(self, mock_entry):
+        s = AgentTokensSensor(self._coord({}), mock_entry, "cora", "Cora", None)
+        assert s.native_value is None
+
+    def test_cost_value(self, mock_entry):
+        coord = self._coord({"cora": {"estimatedTotalCostGBP": 0.42}})
+        s = AgentCostSensor(coord, mock_entry, "cora", "Cora", None)
+        assert s.native_value == 0.42
+
+    def test_cost_none_when_no_pricing(self, mock_entry):
+        coord = self._coord({"cora": {"totals": {"totalIn": 1, "totalOut": 1}}})
+        s = AgentCostSensor(coord, mock_entry, "cora", "Cora", None)
+        assert s.native_value is None
+
+    def test_device_identifier_matches_agent_device(self, mock_entry):
+        # Must share the conversation/ai_task device tuple: (DOMAIN, entry_subentry)
+        s = AgentTokensSensor(self._coord({}), mock_entry, "cora", "Cora", "sub1")
+        assert (DOMAIN, "test_entry_sub1") in s._attr_device_info["identifiers"]

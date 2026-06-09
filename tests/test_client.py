@@ -304,3 +304,34 @@ class TestExceptionClasses:
     def test_bridge_timeout_error(self):
         err = BridgeTimeoutError()
         assert err.code == "TIMEOUT"
+
+
+class TestObservabilityEndpoints:
+    """CR-0009: usage + doctor request paths and response passthrough."""
+
+    @pytest.mark.asyncio
+    async def test_agent_usage_path_and_response(self, client, mock_response):
+        resp = mock_response(json_data={"agent": "cora", "estimatedTotalCostGBP": 0.42})
+        captured = {}
+
+        def _request(method, url, **kwargs):
+            captured["method"] = method
+            captured["url"] = url
+            return resp
+
+        client._session.request = MagicMock(side_effect=_request)
+        result = await client.agent_usage("cora")
+        assert captured["method"] == "GET"
+        assert captured["url"].endswith("/v1/agents/cora/usage")
+        assert result["estimatedTotalCostGBP"] == 0.42
+
+    @pytest.mark.asyncio
+    async def test_doctor_path(self, client, mock_response):
+        resp = mock_response(json_data={"verdict": "HEALTHY", "findings": []})
+        captured = {}
+        client._session.request = MagicMock(
+            side_effect=lambda method, url, **kw: captured.update(method=method, url=url) or resp
+        )
+        result = await client.doctor()
+        assert captured["url"].endswith("/v1/doctor")
+        assert result["verdict"] == "HEALTHY"

@@ -77,7 +77,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Drift defences (US0029): check agent-context now, and re-check whenever the
     # bridge announces an upgrade (the webhook fires EVENT_BRIDGE_UPGRADED, US0024).
     from .const import EVENT_BRIDGE_UPGRADED
-    from .drift import async_check_agent_context_drift
+    from .drift import async_check_agent_context_drift, async_check_doctor_verdict
 
     await async_check_agent_context_drift(hass, entry)
 
@@ -85,6 +85,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await async_check_agent_context_drift(hass, entry)
 
     entry.async_on_unload(hass.bus.async_listen(EVENT_BRIDGE_UPGRADED, _on_bridge_upgraded))
+
+    # CR-0009: raise/clear a repair issue from the fleet-doctor verdict on each
+    # coordinator update (cheap, reads cached data), and run once now.
+    entry.async_on_unload(
+        coordinator.async_add_listener(lambda: async_check_doctor_verdict(hass, entry))
+    )
+    async_check_doctor_verdict(hass, entry)
 
     return True
 

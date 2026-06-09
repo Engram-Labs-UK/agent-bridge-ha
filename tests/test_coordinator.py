@@ -13,7 +13,12 @@ from custom_components.agent_bridge.coordinator import (
     CoordinatorData,
 )
 
-from .conftest import DISCOVERY_THREE_AGENTS, HEALTH_SHALLOW_OK
+from .conftest import (
+    DISCOVERY_THREE_AGENTS,
+    DOCTOR_HEALTHY,
+    HEALTH_SHALLOW_OK,
+    USAGE_SUMMARY,
+)
 
 
 @pytest.fixture
@@ -28,19 +33,18 @@ def mock_client():
     client = MagicMock()
     client.health = AsyncMock(return_value=HEALTH_SHALLOW_OK)
     client.discover = AsyncMock(return_value=DISCOVERY_THREE_AGENTS)
+    client.agent_usage = AsyncMock(return_value=USAGE_SUMMARY)
+    client.doctor = AsyncMock(return_value=DOCTOR_HEALTHY)
     return client
 
 
 @pytest.fixture
 def coordinator(mock_hass, mock_client):
-    coord = AgentBridgeCoordinator(
-        mock_hass, mock_client, poll_interval=30, discovery_interval=0
-    )
+    coord = AgentBridgeCoordinator(mock_hass, mock_client, poll_interval=30, discovery_interval=0)
     return coord
 
 
 class TestParseAgent:
-
     def test_parses_healthy_agent(self, coordinator):
         raw = {
             "id": "cora",
@@ -70,7 +74,6 @@ class TestParseAgent:
 
 
 class TestAsyncUpdateData:
-
     @pytest.mark.asyncio
     async def test_successful_poll(self, coordinator, mock_client):
         # Force discovery by setting last_discovery to 0
@@ -90,9 +93,7 @@ class TestAsyncUpdateData:
         assert good_data["connected"] is True
 
         # Now fail
-        mock_client.health = AsyncMock(
-            side_effect=BridgeConnectionError("offline")
-        )
+        mock_client.health = AsyncMock(side_effect=BridgeConnectionError("offline"))
         data = await coordinator._async_update_data()
         # Should use cached data (failure 1 of 3)
         assert data["connected"] is True
@@ -100,9 +101,7 @@ class TestAsyncUpdateData:
 
     @pytest.mark.asyncio
     async def test_disconnected_after_3_failures(self, coordinator, mock_client):
-        mock_client.health = AsyncMock(
-            side_effect=BridgeConnectionError("offline")
-        )
+        mock_client.health = AsyncMock(side_effect=BridgeConnectionError("offline"))
         # No cached data
         coordinator._last_good_data = None
 
@@ -122,9 +121,7 @@ class TestAsyncUpdateData:
         await coordinator._async_update_data()
 
         # Fail 3 times
-        mock_client.health = AsyncMock(
-            side_effect=BridgeConnectionError("offline")
-        )
+        mock_client.health = AsyncMock(side_effect=BridgeConnectionError("offline"))
         for _ in range(3):
             data = await coordinator._async_update_data()
             assert data["connected"] is True  # still using cache
@@ -135,13 +132,10 @@ class TestAsyncUpdateData:
 
     @pytest.mark.asyncio
     async def test_recovery_resets_failures(self, coordinator, mock_client):
-
         await coordinator._async_update_data()
 
         # Fail once
-        mock_client.health = AsyncMock(
-            side_effect=BridgeConnectionError("offline")
-        )
+        mock_client.health = AsyncMock(side_effect=BridgeConnectionError("offline"))
         await coordinator._async_update_data()
         assert coordinator._consecutive_failures == 1
 
@@ -152,10 +146,8 @@ class TestAsyncUpdateData:
 
 
 class TestAgentDiffDetection:
-
     @pytest.mark.asyncio
     async def test_new_agent_fires_event(self, coordinator, mock_client, mock_hass):
-
         coordinator._previous_agents = []
         await coordinator._async_update_data()
 
@@ -166,11 +158,15 @@ class TestAgentDiffDetection:
 
     @pytest.mark.asyncio
     async def test_removed_agent_fires_event(self, coordinator, mock_client, mock_hass):
-
         coordinator._previous_agents = [
             AgentInfo(
-                id="old_agent", name="Old", description="", healthy=True,
-                adapter="", capabilities={}, tags=[]
+                id="old_agent",
+                name="Old",
+                description="",
+                healthy=True,
+                adapter="",
+                capabilities={},
+                tags=[],
             ),
             *[coordinator._parse_agent(a) for a in DISCOVERY_THREE_AGENTS],
         ]
@@ -184,6 +180,7 @@ class TestAgentDiffDetection:
     @pytest.mark.asyncio
     async def test_discovery_interval_respected(self, coordinator, mock_client):
         import time
+
         # Override interval to something large and set last discovery to now
         coordinator._discovery_interval = 9999
         coordinator._last_discovery = time.monotonic()
@@ -194,3 +191,29 @@ class TestAgentDiffDetection:
         await coordinator._async_update_data()
         # discover should NOT be called since interval hasn't passed
         mock_client.discover.assert_not_called()
+
+
+class TestObservabilityPolling:
+    """CR-0009: usage + doctor refresh on the discovery cadence, best-effort."""
+
+    @pytest.mark.asyncio
+    async def test_usage_and_doctor_populated(self, coordinator):
+        coordinator._last_discovery = 0
+        data = await coordinator._async_update_data()
+        assert "cora" in data["usage"]
+        assert data["doctor"]["verdict"] == "HEALTHY"
+
+    @pytest.mark.asyncio
+    async def test_per_agent_usage_failure_isolated(self, coordinator, mock_client):
+        async def flaky(agent_id):
+            if agent_id == "cora":
+                raise BridgeConnectionError("usage offline")
+            return {"agent": agent_id, "totals": {"totalIn": 1, "totalOut": 1}}
+
+        mock_client.agent_usage = AsyncMock(side_effect=flaky)
+        coordinator._last_discovery = 0
+        data = await coordinator._async_update_data()
+        # the poll still succeeds; the failing agent is simply absent
+        assert data["connected"] is True
+        assert "cora" not in data["usage"]
+        assert any(k != "cora" for k in data["usage"])

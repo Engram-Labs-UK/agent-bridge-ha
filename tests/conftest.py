@@ -7,15 +7,19 @@ from __future__ import annotations
 import dataclasses as _dc
 import inspect as _inspect
 from homeassistant.components import conversation as _conv_mod
+
 _CR = _conv_mod.ConversationResult
 if "continue_conversation" not in _inspect.signature(_CR.__init__).parameters:
+
     @_dc.dataclass(slots=True)
     class _PatchedConversationResult:
         response: object
         conversation_id: str | None = None
         continue_conversation: bool = False
+
         def as_dict(self):
             return _dc.asdict(self)
+
     _conv_mod.ConversationResult = _PatchedConversationResult
 
 from typing import Any
@@ -106,10 +110,58 @@ def mock_client(mock_session):
     client.discover = AsyncMock(return_value=DISCOVERY_THREE_AGENTS)
     client.chat = AsyncMock(return_value=CHAT_SUCCESS)
     client.invoke_tool = AsyncMock(return_value={"result": "ok"})
+    client.agent_usage = AsyncMock(return_value=USAGE_SUMMARY)
+    client.doctor = AsyncMock(return_value=DOCTOR_HEALTHY)
     return client
 
 
 # --- Canned responses ---
+
+# CR-0009: per-agent usage (typed bridge v4.x surface) + fleet doctor verdicts.
+USAGE_SUMMARY: dict[str, Any] = {
+    "agent": "cora",
+    "range": {"since": "2026-06-01T00:00:00Z", "until": "2026-06-09T00:00:00Z"},
+    "cumulative": True,
+    "totals": {"totalIn": 12000, "totalOut": 3400, "turnCount": 87},
+    "perModel": [
+        {
+            "modelKey": "anthropic/claude",
+            "totalIn": 12000,
+            "totalOut": 3400,
+            "turnCount": 87,
+            "estimatedCostGBP": 0.42,
+        }
+    ],
+    "perChannel": [],
+    "estimatedTotalCostGBP": 0.42,
+}
+
+USAGE_NO_PRICING: dict[str, Any] = {
+    "agent": "cora",
+    "range": {"since": "2026-06-01T00:00:00Z", "until": "2026-06-09T00:00:00Z"},
+    "totals": {"totalIn": 100, "totalOut": 50, "turnCount": 2},
+    "perModel": [],
+    "perChannel": [],
+    # estimatedTotalCostGBP absent -> the cost sensor reports None
+}
+
+DOCTOR_HEALTHY: dict[str, Any] = {
+    "timestamp": "2026-06-09T00:00:00Z",
+    "verdict": "HEALTHY",
+    "summary": {"bridge": "ready", "mode": "primary", "version": "4.141.0"},
+    "findings": [],
+    "recommendations": [],
+}
+
+DOCTOR_CRITICAL: dict[str, Any] = {
+    "timestamp": "2026-06-09T00:00:00Z",
+    "verdict": "CRITICAL",
+    "summary": {"bridge": "error", "mode": "primary", "version": "4.141.0"},
+    "findings": [
+        {"severity": "critical", "area": "providers", "detail": "no provider key configured"}
+    ],
+    "recommendations": ["set a provider key"],
+}
 
 HEALTH_SHALLOW_OK: dict[str, Any] = {
     "status": "ok",

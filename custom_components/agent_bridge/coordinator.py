@@ -89,6 +89,9 @@ class CoordinatorData(TypedDict):
     # hard-error CoordinatorData omits them -- typed NotRequired and read via .get().
     tool_surface: NotRequired[str]
     read_only_safe: NotRequired[bool]
+    # CR-0009 observability, refreshed on the discovery cadence; read via .get().
+    usage: NotRequired[dict[str, dict[str, Any]]]  # keyed by agent_id
+    doctor: NotRequired[dict[str, Any]]
 
 
 class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
@@ -117,6 +120,10 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
         self._consecutive_failures: int = 0
         self._last_good_data: CoordinatorData | None = None
         self._previous_agents: list[AgentInfo] = []
+        # CR-0009: usage (per agent_id) + the fleet doctor verdict, refreshed on the
+        # discovery cadence and carried forward between the faster health polls.
+        self._usage: dict[str, dict[str, Any]] = {}
+        self._doctor: dict[str, Any] = {}
 
     def _parse_agent(self, raw: dict[str, Any]) -> AgentInfo:
         """Parse a raw agent dict into typed AgentInfo (v4.36 surface, US0028/AC2)."""
@@ -213,6 +220,9 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 self._detect_agent_changes(agents)
                 self._previous_agents = agents
                 self._last_discovery = now
+                # CR-0009: refresh usage (per agent) + the fleet doctor on the same
+                # slow cadence. Best-effort -- a failure here must not fail the poll.
+                await self._refresh_observability(agents)
 
             # Tri-state /v1/health enrichment (US0028/AC4). Optional + non-fatal: the
             # tri-state `bridge` field maps a healthy-but-warning state distinctly,
@@ -237,6 +247,8 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 last_poll=datetime.now(tz=UTC).isoformat(),
                 tool_surface=tool_surface,
                 read_only_safe=read_only_safe,
+                usage=self._usage,
+                doctor=self._doctor,
             )
 
             self._consecutive_failures = 0
@@ -274,6 +286,38 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 agents=self._previous_agents,
                 last_poll=datetime.now(tz=UTC).isoformat(),
             )
+
+    async def _refresh_observability(self, agents: list[AgentInfo]) -> None:
+        """Refresh per-agent usage + the fleet doctor (CR-0009). Best-effort.
+
+        Each call is isolated: one agent's usage failing (or the doctor endpoint
+        being unavailable on an older bridge) must not blank the others or fail the
+        poll. Values persist between refreshes via ``self._usage``/``self._doctor``.
+        """
+        usage_fn = getattr(self.client, "agent_usage", None)
+        if usage_fn is not None:
+            fresh: dict[str, dict[str, Any]] = {}
+            for agent in agents:
+                agent_id = agent["id"]
+                try:
+                    result = await usage_fn(agent_id)
+                except Exception:
+                    # keep the last known value for this agent if we have one
+                    if agent_id in self._usage:
+                        fresh[agent_id] = self._usage[agent_id]
+                    continue
+                if isinstance(result, dict):
+                    fresh[agent_id] = result
+            self._usage = fresh
+
+        doctor_fn = getattr(self.client, "doctor", None)
+        if doctor_fn is not None:
+            try:
+                result = await doctor_fn()
+            except Exception:
+                result = None
+            if isinstance(result, dict):
+                self._doctor = result
 
     async def _poll_v1_health(self) -> dict[str, Any] | None:
         """Poll the auth-gated /v1/health, or None if unavailable (US0028/AC4).
