@@ -32,7 +32,6 @@ from custom_components.agent_bridge.const import (
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
     CONF_CONTEXT_MAX_CHARS,
-    CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
     CONF_SSL_VERIFY,
     CONF_THINKING_TIMEOUT,
@@ -79,7 +78,6 @@ def mock_config_entry_options() -> dict[str, Any]:
         CONF_CONTEXT_MAX_CHARS: DEFAULT_CONTEXT_MAX_CHARS,
         CONF_THINKING_TIMEOUT: DEFAULT_THINKING_TIMEOUT,
         CONF_SSL_VERIFY: True,
-        CONF_DEBUG_LOGGING: False,
     }
 
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from .const import (
-    CONF_CALLER_ID,
     CONF_DEFAULT_AGENT,
     DEFAULT_CALLER_ID,
     MAX_TEXT_DEPTH,
@@ -18,17 +17,10 @@ def resolve_caller_id(entry: Any) -> str:
 
     Bridge v4.36 requires the caller to be a **registered agent id** so it can
     resolve the caller's crew for cross-agent dispatch; an unregistered literal like
-    ``homeassistant`` is rejected with 403. Precedence:
-
-    1. an explicit ``caller_id`` option (operator-set, e.g. a dedicated HA caller
-       once the fleet provisions one -- US0031),
-    2. the configured ``default_agent`` (always a registered agent, so chat works
-       out of the box),
-    3. ``DEFAULT_CALLER_ID`` as a last resort.
+    ``homeassistant`` is rejected with 403. The configured ``default_agent`` is always
+    a registered agent, so it is used as the caller; ``DEFAULT_CALLER_ID`` is the last
+    resort. (CR-0013 removed the operator-editable Caller ID override.)
     """
-    explicit = str(entry.options.get(CONF_CALLER_ID) or "").strip()
-    if explicit:
-        return explicit
     default_agent = str(entry.data.get(CONF_DEFAULT_AGENT) or "").strip()
     if default_agent:
         return default_agent

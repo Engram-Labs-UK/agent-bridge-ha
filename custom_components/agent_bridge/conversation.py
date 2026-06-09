@@ -46,7 +46,6 @@ from .client import BridgeClient, BridgeError
 from .const import (
     CONF_AGENT_ID,
     CONF_CONTEXT_MAX_CHARS,
-    CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
     CONF_ENABLE_STREAMING,
     CONF_PROMPT,
@@ -756,15 +755,16 @@ class AgentBridgeConversationEntity(ConversationEntity):
             now=dt_util.utcnow(),
         )
 
-        if options.get(CONF_DEBUG_LOGGING, False):
-            _LOGGER.info(
-                "Conversation turn: agent=%s conversation=%s channel=%s area=%s source=%s",
-                self._agent_id,
-                chat_log.conversation_id,
-                session_channel,
-                area_name,
-                source_type,
-            )
+        # CR-0013: emit at debug level so HA's built-in per-entry debug logging
+        # captures it (no dedicated toggle).
+        _LOGGER.debug(
+            "Conversation turn: agent=%s conversation=%s channel=%s area=%s source=%s",
+            self._agent_id,
+            chat_log.conversation_id,
+            session_channel,
+            area_name,
+            source_type,
+        )
 
         # US0033: optionally stream the reply into the ChatLog as deltas (lower TTS
         # latency). Opt-in; any failure falls back to the proven non-streaming path.

@@ -9,18 +9,18 @@
 | --- | --- |
 | Proposed | 1 |
 | Review | 2 |
-| Implemented | 7 |
+| Implemented | 9 |
 | Rejected | 0 |
 | Deferred | 1 |
-| **Total** | **11** |
+| **Total** | **13** |
 
 ## By Priority
 
 | Priority | Proposed | Review | Implemented | Deferred |
 | --- | --- | --- | --- | --- |
 | P1 | 0 | 1 | 1 | 1 |
-| P2 | 0 | 1 | 5 | 0 |
-| P3 | 1 | 0 | 1 | 0 |
+| P2 | 0 | 1 | 6 | 0 |
+| P3 | 1 | 0 | 2 | 0 |
 | P4 | 0 | 0 | 0 | 0 |
 
 > The two remaining **Review** CRs (CR-0002, CR-0004) are **component-complete**: all
@@ -44,6 +44,8 @@
 | [CR-0009](cr0009.md) | Surface bridge usage/cost and fleet doctor in HA | P2 | Implemented | feature-request | — | 2026-06-09 |
 | [CR-0010](cr0010.md) | Agent memory record/recall from Home Assistant | P2 | Implemented | feature-request | — | 2026-06-09 |
 | [CR-0011](cr0011.md) | Full PRD/TRD/TSD reconcile to post-EP0008/CR-0010 reality | P3 | Proposed | spec-gap | — | 2026-06-09 |
+| [CR-0012](cr0012.md) | Make the fleet-doctor repair issue opt-in (default off) | P2 | Implemented | production-feedback | — | 2026-06-09 |
+| [CR-0013](cr0013.md) | Options-flow refinements — remove Caller ID + Voice debug; session preset dropdown | P3 | Implemented | production-feedback | — | 2026-06-09 |
 
 ## Dependencies
 

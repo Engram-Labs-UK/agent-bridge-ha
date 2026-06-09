@@ -198,16 +198,29 @@ class TestDriftRepairIssue:
 
 
 class TestDoctorRepairIssue:
-    """CR-0009: the fleet-doctor verdict raises/clears an HA repair issue."""
+    """CR-0009/CR-0012: the fleet-doctor verdict raises/clears an HA repair issue
+    only when the opt-in 'doctor_alerts' option is enabled."""
 
     @staticmethod
-    def _entry_with_doctor(hass, entry_id, doctor):
+    def _entry_with_doctor(hass, entry_id, doctor, *, alerts=True):
         coordinator = MagicMock()
         coordinator.data = {"doctor": doctor}
         entry = MagicMock()
         entry.entry_id = entry_id
+        entry.options = {"doctor_alerts": alerts}
         hass.data.setdefault(DOMAIN, {})[entry_id] = {"coordinator": coordinator}
         return entry
+
+    @pytest.mark.asyncio
+    async def test_opt_in_off_raises_nothing(self, hass):
+        # CR-0012: with the alerts option off, a CRITICAL verdict raises no repair.
+        from homeassistant.helpers import issue_registry as ir
+
+        entry = self._entry_with_doctor(
+            hass, "doc_off", {"verdict": "CRITICAL", "findings": []}, alerts=False
+        )
+        async_check_doctor_verdict(hass, entry)
+        assert ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_off") is None
 
     @pytest.mark.asyncio
     async def test_critical_raises_error_issue(self, hass):

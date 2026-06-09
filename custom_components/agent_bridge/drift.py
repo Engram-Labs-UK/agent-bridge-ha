@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
 from .client import BridgeError
-from .const import DOMAIN, TESTED_BRIDGE_VERSION
+from .const import CONF_DOCTOR_ALERTS, DOMAIN, TESTED_BRIDGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,6 +47,12 @@ def async_check_doctor_verdict(hass: HomeAssistant, entry: ConfigEntry) -> None:
     Reads the doctor payload already cached on the coordinator (no I/O), so this is a
     cheap synchronous listener fired on each coordinator update.
     """
+    # CR-0012: the fleet-doctor repair is opt-in. When off, never raise it and clear
+    # any issue left from a previous run (e.g. after disabling the toggle).
+    if not entry.options.get(CONF_DOCTOR_ALERTS, False):
+        ir.async_delete_issue(hass, DOMAIN, _doctor_issue_id(entry))
+        return
+
     data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
     coordinator = data.get("coordinator")
     doctor = (coordinator.data or {}).get("doctor", {}) if coordinator else {}
