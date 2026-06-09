@@ -1,6 +1,6 @@
 # BG0002: Config flow asks for two agents when only voice agent is needed
 
-> **Status:** Open
+> **Status:** Fixed
 > **Severity:** Medium
 > **Priority:** P2
 > **Reporter:** Darren
@@ -61,14 +61,23 @@ The PRD originally specified separate default and voice agents (PRD Section 3, "
 
 ---
 
+## Fix Outcome
+
+Resolved by the EP0007 realignment (Option B). Initial setup (`async_step_agents`)
+now asks for a **single** `CONF_DEFAULT_AGENT`, and both `default_agent` and
+`voice_agent` are set to that one choice (`config_flow.py:133-154`). Multiple agents
+are now added as separate conversation entities via the "Add agent" subentry flow
+(CR-0003/US0025), which superseded the original two-field design. Closed in Wave 5;
+code already in `main`.
+
 ## Verification
 
-- [ ] Fix verified in development
-- [ ] Regression tests pass
-- [ ] No side effects observed
+- [x] Fix verified in development (setup shows one agent selector; `test_config_flow` covers entry creation)
+- [x] Regression tests pass (CI)
+- [x] No side effects observed
 
-**Verified by:** --
-**Verification date:** --
+**Verified by:** code review + CI
+**Verification date:** 2026-06-09
 
 ---
 

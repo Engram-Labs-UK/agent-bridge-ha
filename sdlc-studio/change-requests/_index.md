@@ -7,27 +7,33 @@
 
 | Status | Count |
 | --- | --- |
-| Proposed | 1 |
+| Proposed | 0 |
 | Review | 2 |
 | Implemented | 7 |
 | Rejected | 0 |
-| Deferred | 0 |
+| Deferred | 1 |
 | **Total** | **10** |
 
 ## By Priority
 
-| Priority | Proposed | Review | Implemented |
-| --- | --- | --- | --- |
-| P1 | 1 | 1 | 1 |
-| P2 | 0 | 1 | 5 |
-| P3 | 0 | 0 | 1 |
-| P4 | 0 | 0 | 0 |
+| Priority | Proposed | Review | Implemented | Deferred |
+| --- | --- | --- | --- | --- |
+| P1 | 0 | 1 | 1 | 1 |
+| P2 | 0 | 1 | 5 | 0 |
+| P3 | 0 | 0 | 1 | 0 |
+| P4 | 0 | 0 | 0 | 0 |
+
+> The two remaining **Review** CRs (CR-0002, CR-0004) are **component-complete**: all
+> in-repo code is shipped and CI-green; their only outstanding ACs are operator-gated
+> (live E2E / human TTS perception) or cross-repo (bridge PR #42, agent harness
+> provisioning), tracked in `IMPLEMENTATION-KICKOFF.md`. They are not marked Implemented
+> because that would falsely imply those external ACs are verified.
 
 ## All Change Requests
 
 | ID | Title | Priority | Status | Type | Linked Epics | Date |
 | --- | --- | --- | --- | --- | --- | --- |
-| [CR-0001](cr0001.md) | Multiple config entries for per-agent voice pipelines | P1 | Proposed | design-change | — (superseded by CR-0002) | 2026-04-06 |
+| [CR-0001](cr0001.md) | Multiple config entries for per-agent voice pipelines | P1 | Deferred | design-change | — (superseded by CR-0002) | 2026-04-06 |
 | [CR-0002](cr0002.md) | Re-align to Bridge v4.36 + modern HA conversation APIs | P1 | Review | design-change | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | 2026-06-01 |
 | [CR-0003](cr0003.md) | Crew-scoped agent picker + editable per-agent instructions + HA-origin prompt | P2 | Implemented | production-feedback | [EP0007](../epics/EP0007-bridge-v436-modern-ha-realignment.md) | 2026-06-02 |
 | [CR-0004](cr0004.md) | Reactive continuity + proactive + multimodal conversation expansion | P2 | Review | feature-request | [EP0008](../epics/EP0008-conversation-capability-expansion.md) | 2026-06-05 |
@@ -42,7 +48,7 @@
 
 | CR | Depends On | Dependency Status |
 | --- | --- | --- |
-| CR-0001 | BG0001, BG0002 | Open, Open |
+| CR-0001 | BG0001, BG0002 | Fixed, Fixed |
 | CR-0002 | EP0002, EP0004 | Done, Done |
 | CR-0003 | — | — |
 | CR-0004 | EP0007 | Review |
