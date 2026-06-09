@@ -129,6 +129,35 @@ class TestAgentUsageSensors:
         s = AgentTokensSensor(self._coord({}), mock_entry, "cora", "Cora", None)
         assert s.native_value is None
 
+    def test_tokens_none_on_null_field(self, mock_entry):
+        # BG0006: a null totalIn must not raise (int(None) -> TypeError); the
+        # remaining numeric field still counts.
+        coord = self._coord({"cora": {"totals": {"totalIn": None, "totalOut": 5}}})
+        s = AgentTokensSensor(coord, mock_entry, "cora", "Cora", None)
+        assert s.native_value == 5
+
+    def test_tokens_none_on_non_numeric(self, mock_entry):
+        coord = self._coord({"cora": {"totals": {"totalIn": "lots", "totalOut": "n/a"}}})
+        s = AgentTokensSensor(coord, mock_entry, "cora", "Cora", None)
+        assert s.native_value is None
+
+    def test_tokens_none_on_empty_totals(self, mock_entry):
+        # BG0006: present-but-empty totals -> unknown, not a misleading 0.
+        coord = self._coord({"cora": {"totals": {}}})
+        s = AgentTokensSensor(coord, mock_entry, "cora", "Cora", None)
+        assert s.native_value is None
+
+    def test_cost_none_on_null(self, mock_entry):
+        coord = self._coord({"cora": {"estimatedTotalCostGBP": None}})
+        s = AgentCostSensor(coord, mock_entry, "cora", "Cora", None)
+        assert s.native_value is None
+
+    def test_cost_ignores_bool(self, mock_entry):
+        # bool is an int subclass; True must not become cost 1.0.
+        coord = self._coord({"cora": {"estimatedTotalCostGBP": True}})
+        s = AgentCostSensor(coord, mock_entry, "cora", "Cora", None)
+        assert s.native_value is None
+
     def test_cost_value(self, mock_entry):
         coord = self._coord({"cora": {"estimatedTotalCostGBP": 0.42}})
         s = AgentCostSensor(coord, mock_entry, "cora", "Cora", None)

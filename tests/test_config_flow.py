@@ -124,6 +124,8 @@ class TestConfigFlow:
         # Should advance to agents step
         assert result["type"] == "form"
         assert result["step_id"] == "agents"
+        # BG0009: the first-run picker requests crew so labels read "name (crew)".
+        instance.discover.assert_awaited_with(include=["crew"])
 
     @pytest.mark.asyncio
     async def test_step_agents_creates_entry(self):

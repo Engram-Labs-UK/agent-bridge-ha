@@ -165,10 +165,16 @@ class _AgentUsageBase(CoordinatorEntity[AgentBridgeCoordinator], SensorEntity):
         return data.get("usage", {}).get(self._agent_id, {}) or {}
 
 
+def _as_number(value: Any) -> int | float | None:
+    """A numeric bridge value, or None. Excludes bool (a subclass of int)."""
+    if isinstance(value, bool):
+        return None
+    return value if isinstance(value, (int, float)) else None
+
+
 class AgentTokensSensor(_AgentUsageBase):
     """Total tokens (in + out) this agent has used over the reported range."""
 
-    _attr_translation_key = "agent_tokens"
     _attr_native_unit_of_measurement = "tokens"
     _attr_state_class = SensorStateClass.TOTAL
 
@@ -181,10 +187,17 @@ class AgentTokensSensor(_AgentUsageBase):
 
     @property
     def native_value(self) -> int | None:
+        # Sum only the numeric in/out values; return None (not 0) when the bridge
+        # sent no usable totals, and never raise on a null/non-numeric field (BG0006).
         totals = self._usage().get("totals")
         if not isinstance(totals, dict):
             return None
-        return int(totals.get("totalIn", 0)) + int(totals.get("totalOut", 0))
+        nums = [
+            n
+            for n in (_as_number(totals.get("totalIn")), _as_number(totals.get("totalOut")))
+            if n is not None
+        ]
+        return int(sum(nums)) if nums else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -204,7 +217,6 @@ class AgentTokensSensor(_AgentUsageBase):
 class AgentCostSensor(_AgentUsageBase):
     """Estimated cost (GBP) this agent has incurred over the reported range."""
 
-    _attr_translation_key = "agent_cost"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_native_unit_of_measurement = "GBP"
     _attr_state_class = SensorStateClass.TOTAL
@@ -219,8 +231,8 @@ class AgentCostSensor(_AgentUsageBase):
     @property
     def native_value(self) -> float | None:
         # None when the bridge has no pricing configured (cost not estimable).
-        cost = self._usage().get("estimatedTotalCostGBP")
-        return float(cost) if isinstance(cost, (int, float)) else None
+        cost = _as_number(self._usage().get("estimatedTotalCostGBP"))
+        return float(cost) if cost is not None else None
 
 
 def _device_info(entry: ConfigEntry) -> dict:

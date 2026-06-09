@@ -7,10 +7,10 @@
 | Status | Count |
 |--------|-------|
 | Open | 0 |
-| Fixed | 5 |
+| Fixed | 9 |
 | In Progress | 0 |
 | Closed | 0 |
-| **Total** | **5** |
+| **Total** | **9** |
 
 ## Bugs
 
@@ -21,8 +21,14 @@
 | [BG0003](BG0003-picker-lists-models-and-non-agents.md) | Agent picker lists models/chatbots/workerbots | Medium | P2 | Fixed | config_flow.py |
 | [BG0004](BG0004-caller-id-not-registered-auth-error.md) | Conversation fails with "authentication problem" — default caller_id `homeassistant` rejected by bridge v4.36 | High | P1 | Fixed | const/client/config_flow/conversation |
 | [BG0005](BG0005-conversation-entity-shows-raw-agent-id.md) | Conversation entity shows the raw bridge agent id instead of the agent name | Medium | P2 | Fixed | conversation.py |
+| [BG0006](BG0006-token-sensor-crashes-on-null-totals.md) | Usage token sensor raises on null/non-numeric totals; 0-vs-None; dead translation_key | High | P2 | Fixed | sensor.py |
+| [BG0007](BG0007-fleet-doctor-issue-lifecycle.md) | Fleet-doctor repair issue wrongly cleared on bridge outage + churns every poll | Medium | P2 | Fixed | coordinator/drift |
+| [BG0008](BG0008-coordinator-emits-observability-by-reference.md) | Coordinator emits usage/doctor by reference (aliasing hazard) | Low | P3 | Fixed | coordinator/sensor |
+| [BG0009](BG0009-first-run-picker-lost-status-label.md) | First-run agent picker lost its health/crew label (BG0005 regression) | Low | P3 | Fixed | config_flow.py |
 
 ## Notes
+
+- BG0006..BG0009 came from the RV0006 xhigh code review of the 0.10.0 release (2026-06-09). All four are in the CR-0009/BG0005 code shipped this release; fixed together and shipped as 0.10.1.
 
 - BG0001 and BG0002 were both resolved by the EP0007 realignment (single-agent setup + options agent picker + per-agent subentries) and closed as Fixed in the Wave 5 backlog reconcile (2026-06-09); the records had simply never been closed. Live UI confirmation lands on the next deploy.
 - BG0001 and BG0002 are related -- fixing both together would simplify the config flow to a single agent selector in setup, with an optional voice agent override in the options flow

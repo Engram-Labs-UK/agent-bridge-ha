@@ -247,8 +247,9 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 last_poll=datetime.now(tz=UTC).isoformat(),
                 tool_surface=tool_surface,
                 read_only_safe=read_only_safe,
-                usage=self._usage,
-                doctor=self._doctor,
+                # Emit shallow copies so consumers cannot mutate our working maps (BG0008).
+                usage=dict(self._usage),
+                doctor=dict(self._doctor),
             )
 
             self._consecutive_failures = 0
@@ -285,6 +286,11 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
                 agent_count_total=0,
                 agents=self._previous_agents,
                 last_poll=datetime.now(tz=UTC).isoformat(),
+                # Carry the last-known usage/doctor forward so a connectivity outage
+                # (signalled by connected=False) does not clear the fleet-doctor repair
+                # issue or blank the usage sensors (BG0007). Copies, per BG0008.
+                usage=dict(self._usage),
+                doctor=dict(self._doctor),
             )
 
     async def _refresh_observability(self, agents: list[AgentInfo]) -> None:

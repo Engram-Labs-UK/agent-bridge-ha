@@ -217,3 +217,25 @@ class TestObservabilityPolling:
         assert data["connected"] is True
         assert "cora" not in data["usage"]
         assert any(k != "cora" for k in data["usage"])
+
+    @pytest.mark.asyncio
+    async def test_emitted_usage_is_a_copy(self, coordinator):
+        # BG0008: consumers must not be able to mutate the coordinator's working maps.
+        coordinator._last_discovery = 0
+        data = await coordinator._async_update_data()
+        assert data["usage"] is not coordinator._usage
+        assert data["doctor"] is not coordinator._doctor
+
+    @pytest.mark.asyncio
+    async def test_error_path_carries_usage_and_doctor(self, coordinator, mock_client):
+        # BG0007: a connectivity outage must not blank usage/doctor (carry forward).
+        coordinator._usage = {"cora": {"totals": {"totalIn": 1, "totalOut": 1}}}
+        coordinator._doctor = {"verdict": "CRITICAL"}
+        coordinator._last_good_data = None
+        mock_client.health = AsyncMock(side_effect=BridgeConnectionError("offline"))
+
+        data = await coordinator._async_update_data()
+        assert data["connected"] is False
+        assert data["usage"] == {"cora": {"totals": {"totalIn": 1, "totalOut": 1}}}
+        assert data["doctor"] == {"verdict": "CRITICAL"}
+        assert data["usage"] is not coordinator._usage  # carried as a copy

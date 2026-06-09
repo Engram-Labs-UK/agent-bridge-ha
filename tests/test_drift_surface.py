@@ -248,3 +248,17 @@ class TestDoctorRepairIssue:
         hass.data[DOMAIN]["doc_3"]["coordinator"].data = {"doctor": {"verdict": "HEALTHY"}}
         async_check_doctor_verdict(hass, entry)
         assert ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_3") is None
+
+    @pytest.mark.asyncio
+    async def test_gate_records_applied_verdict(self, hass):
+        # BG0007: the check records the applied verdict and a repeated identical
+        # call is a no-op (the issue persists).
+        from homeassistant.helpers import issue_registry as ir
+
+        entry = self._entry_with_doctor(hass, "doc_4", {"verdict": "CRITICAL", "findings": []})
+        async_check_doctor_verdict(hass, entry)
+        coord = hass.data[DOMAIN]["doc_4"]["coordinator"]
+        assert coord._fleet_doctor_applied == "CRITICAL"
+
+        async_check_doctor_verdict(hass, entry)  # unchanged -> no-op
+        assert ir.async_get(hass).async_get_issue(DOMAIN, "fleet_doctor_doc_4") is not None

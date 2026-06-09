@@ -36,6 +36,8 @@ _VERDICT_SEVERITY = {
     "CRITICAL": ir.IssueSeverity.ERROR,
 }
 
+_UNSET = object()  # first-call sentinel for the verdict gate (BG0007)
+
 
 @callback
 def async_check_doctor_verdict(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -50,6 +52,17 @@ def async_check_doctor_verdict(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     verdict = str(doctor.get("verdict", "")).upper()
     severity = _VERDICT_SEVERITY.get(verdict)
+
+    # The listener fires every poll but the verdict only refreshes every discovery
+    # cycle; only touch the issue registry when the applied state changes (BG0007).
+    # A first-call sentinel reconciles any issue left over from a prior session.
+    applied = verdict if severity is not None else ""
+    prev = getattr(coordinator, "_fleet_doctor_applied", _UNSET) if coordinator else _UNSET
+    if prev is not _UNSET and prev == applied:
+        return
+    if coordinator is not None:
+        coordinator._fleet_doctor_applied = applied
+
     if severity is None:
         ir.async_delete_issue(hass, DOMAIN, _doctor_issue_id(entry))
         return
