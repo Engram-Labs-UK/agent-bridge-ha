@@ -7,9 +7,9 @@
 
 | Status | Count |
 | --- | --- |
-| Proposed | 4 |
+| Proposed | 3 |
 | Review | 2 |
-| Implemented | 4 |
+| Implemented | 5 |
 | Rejected | 0 |
 | Deferred | 0 |
 | **Total** | **10** |
@@ -18,7 +18,7 @@
 
 | Priority | Proposed | Review | Implemented |
 | --- | --- | --- | --- |
-| P1 | 2 | 1 | 0 |
+| P1 | 1 | 1 | 1 |
 | P2 | 2 | 1 | 3 |
 | P3 | 0 | 0 | 1 |
 | P4 | 0 | 0 | 0 |
@@ -34,7 +34,7 @@
 | [CR-0005](cr0005.md) | Replace placeholder brand icon with Agent Crew logo | P3 | Implemented | design-change | — (standalone asset swap) | 2026-06-09 |
 | [CR-0006](cr0006.md) | Cull dead and no-op options-flow controls | P2 | Implemented | design-change | — | 2026-06-09 |
 | [CR-0007](cr0007.md) | Options-flow usability restructure | P2 | Implemented | production-feedback | — | 2026-06-09 |
-| [CR-0008](cr0008.md) | Re-baseline to bridge v4.137 + capability audit | P1 | Proposed | spec-gap | — | 2026-06-09 |
+| [CR-0008](cr0008.md) | Re-baseline to bridge v4.141 + capability audit | P1 | Implemented | spec-gap | — | 2026-06-09 |
 | [CR-0009](cr0009.md) | Surface bridge usage/cost and fleet doctor in HA | P2 | Proposed | feature-request | — | 2026-06-09 |
 | [CR-0010](cr0010.md) | Agent memory record/recall from Home Assistant | P2 | Proposed | feature-request | — | 2026-06-09 |
 
@@ -50,8 +50,8 @@
 | CR-0006 | — | — |
 | CR-0007 | CR-0006 | Proposed |
 | CR-0008 | — | — |
-| CR-0009 | CR-0008 | Proposed |
-| CR-0010 | CR-0008 | Proposed |
+| CR-0009 | CR-0008 | Implemented |
+| CR-0010 | CR-0008 | Implemented |
 
 ## Notes
 

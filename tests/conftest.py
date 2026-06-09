@@ -113,7 +113,7 @@ def mock_client(mock_session):
 
 HEALTH_SHALLOW_OK: dict[str, Any] = {
     "status": "ok",
-    "version": "3.2.0",
+    "version": "4.141.0",
     "uptime_seconds": 12345,
     "mode": "primary",
     "agents": {"total": 3, "healthy": 3},
@@ -121,7 +121,7 @@ HEALTH_SHALLOW_OK: dict[str, Any] = {
 
 HEALTH_SHALLOW_DEGRADED: dict[str, Any] = {
     "status": "degraded",
-    "version": "3.2.0",
+    "version": "4.141.0",
     "uptime_seconds": 5000,
     "mode": "primary",
     "agents": {"total": 3, "healthy": 1},
@@ -129,7 +129,7 @@ HEALTH_SHALLOW_DEGRADED: dict[str, Any] = {
 
 HEALTH_DEEP: dict[str, Any] = {
     "status": "ok",
-    "version": "3.2.0",
+    "version": "4.141.0",
     "uptime_seconds": 12345,
     "mode": "primary",
     "agents": {
