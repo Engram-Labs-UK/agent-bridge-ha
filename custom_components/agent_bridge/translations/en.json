@@ -34,8 +34,6 @@
                 "data": {
                     "default_agent": "Agent",
                     "context_max_chars": "Max Entity Context (chars)",
-                    "context_strategy": "Context Overflow Strategy",
-                    "enable_tool_calls": "Allow tool execution",
                     "thinking_timeout": "Agent Response Timeout (seconds)",
                     "ssl_verify": "Verify SSL Certificates",
                     "debug_logging": "Voice Debug Logging",

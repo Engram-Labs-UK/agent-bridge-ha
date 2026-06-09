@@ -32,7 +32,7 @@ from .conversation import (
     _is_voice_capable,
     _messages_from_chat_log,
 )
-from .helpers import extract_response_text
+from .helpers import agent_label, extract_response_text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,13 +61,16 @@ async def async_setup_entry(
         agents_by_id = {a["id"]: a for a in coordinator.data["agents"]}
 
     for agent_id, agent_name, subentry_id, _prompt in _agents_from_entry(config_entry):
-        if not _is_voice_capable(agents_by_id.get(agent_id)):
+        agent_info = agents_by_id.get(agent_id)
+        if not _is_voice_capable(agent_info):
             continue
+        # BG0005: friendly name from discovery, never the raw agent id.
+        display_name = agent_label(agent_info) if agent_info else agent_name
         entity = AgentBridgeAITaskEntity(
             config_entry,
             client,
             agent_id=agent_id,
-            agent_name=agent_name,
+            agent_name=display_name,
             subentry_id=subentry_id,
         )
         if subentry_id is not None:

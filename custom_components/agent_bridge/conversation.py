@@ -46,14 +46,12 @@ from .client import BridgeClient, BridgeError
 from .const import (
     CONF_AGENT_ID,
     CONF_CONTEXT_MAX_CHARS,
-    CONF_CONTEXT_STRATEGY,
     CONF_DEBUG_LOGGING,
     CONF_DEFAULT_AGENT,
     CONF_ENABLE_STREAMING,
     CONF_PROMPT,
     CONF_SESSION_IDLE_WINDOW,
     DEFAULT_CONTEXT_MAX_CHARS,
-    DEFAULT_CONTEXT_STRATEGY,
     DEFAULT_CONTINUATION_EXCLUSIONS,
     DEFAULT_CONTINUATION_PHRASES,
     DEFAULT_ENABLE_STREAMING,
@@ -70,7 +68,7 @@ from .exposure import (
     build_entity_context,
     build_recent_changes,
 )
-from .helpers import extract_response_text
+from .helpers import agent_label, extract_response_text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -609,17 +607,22 @@ async def async_setup_entry(
         agents_by_id = {a["id"]: a for a in coordinator.data["agents"]}
 
     for agent_id, agent_name, subentry_id, prompt in _agents_from_entry(config_entry):
-        if not _is_voice_capable(agents_by_id.get(agent_id)):
+        agent_info = agents_by_id.get(agent_id)
+        if not _is_voice_capable(agent_info):
             _LOGGER.debug(
                 "Skipping %s as a voice entity (not a full agent identity)",
                 agent_id,
             )
             continue
+        # BG0005: name the entity from discovery (``name (crew)``, matching the
+        # options picker), never the raw agent id. Falls back to the subentry
+        # title / id only when the bridge has no record for this agent.
+        display_name = agent_label(agent_info) if agent_info else agent_name
         entity = AgentBridgeConversationEntity(
             config_entry,
             client,
             agent_id=agent_id,
-            agent_name=agent_name,
+            agent_name=display_name,
             subentry_id=subentry_id,
             prompt=prompt,
         )
@@ -701,7 +704,6 @@ class AgentBridgeConversationEntity(ConversationEntity):
             self.hass,
             exposed_ids,
             max_chars=options.get(CONF_CONTEXT_MAX_CHARS, DEFAULT_CONTEXT_MAX_CHARS),
-            strategy=options.get(CONF_CONTEXT_STRATEGY, DEFAULT_CONTEXT_STRATEGY),
         )
 
         # Structured speaker/source/location envelope (who/what/where/when) plus the

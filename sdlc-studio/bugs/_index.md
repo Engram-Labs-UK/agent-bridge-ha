@@ -6,8 +6,8 @@
 
 | Status | Count |
 |--------|-------|
-| Open | 3 |
-| Fixed | 2 |
+| Open | 2 |
+| Fixed | 3 |
 | In Progress | 0 |
 | Closed | 0 |
 | **Total** | **5** |
@@ -20,7 +20,7 @@
 | [BG0002](BG0002-config-flow-asks-for-two-agents.md) | Config flow asks for two agents unnecessarily | Medium | P2 | Open | config_flow.py |
 | [BG0003](BG0003-picker-lists-models-and-non-agents.md) | Agent picker lists models/chatbots/workerbots | Medium | P2 | Fixed | config_flow.py |
 | [BG0004](BG0004-caller-id-not-registered-auth-error.md) | Conversation fails with "authentication problem" — default caller_id `homeassistant` rejected by bridge v4.36 | High | P1 | Fixed | const/client/config_flow/conversation |
-| [BG0005](BG0005-conversation-entity-shows-raw-agent-id.md) | Conversation entity shows the raw bridge agent id instead of the agent name | Medium | P2 | Open | conversation.py |
+| [BG0005](BG0005-conversation-entity-shows-raw-agent-id.md) | Conversation entity shows the raw bridge agent id instead of the agent name | Medium | P2 | Fixed | conversation.py |
 
 ## Notes
 

@@ -6,10 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.agent_bridge.event import (
-    MessageReceivedEvent,
-    ToolInvokedEvent,
-)
+from custom_components.agent_bridge.event import MessageReceivedEvent
 from custom_components.agent_bridge.const import DOMAIN
 
 
@@ -37,19 +34,3 @@ class TestMessageReceivedEvent:
     def test_device_info(self, mock_entry):
         event = MessageReceivedEvent(mock_entry)
         assert (DOMAIN, "test_entry") in event._attr_device_info["identifiers"]
-
-
-class TestToolInvokedEvent:
-
-    def test_event_types(self, mock_entry):
-        event = ToolInvokedEvent(mock_entry)
-        assert "tool_invoked_ok" in event._attr_event_types
-        assert "tool_invoked_error" in event._attr_event_types
-
-    def test_unique_id(self, mock_entry):
-        event = ToolInvokedEvent(mock_entry)
-        assert event._attr_unique_id == "test_entry_tool_invoked"
-
-    def test_name(self, mock_entry):
-        event = ToolInvokedEvent(mock_entry)
-        assert event.name == "Tool Invoked"

@@ -74,6 +74,18 @@ def agent_crew(raw: dict[str, Any]) -> str | None:
     return str(team) if team else None
 
 
+def agent_label(raw: dict[str, Any]) -> str:
+    """Human label for an agent, shared by the pickers and the entities (BG0005).
+
+    ``name (crew)`` when the crew is known (matching the options picker), else the
+    bare name. Never the raw agent id -- the id is only a last-resort fallback when
+    an agent has no name at all.
+    """
+    name = raw.get("name") or raw.get("id", "")
+    crew = agent_crew(raw)
+    return f"{name} ({crew})" if crew else name
+
+
 def extract_response_text(data: Any, *, _depth: int = 0) -> str | None:
     """Extract text from a bridge response using priority key traversal.
 
@@ -131,23 +143,3 @@ def extract_response_text(data: Any, *, _depth: int = 0) -> str | None:
                     return result
 
     return None
-
-
-def extract_tool_calls(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract tool_calls from an OpenAI chat completion response."""
-    if not isinstance(data, dict):
-        return []
-
-    choices = data.get("choices")
-    if not isinstance(choices, list) or not choices:
-        return []
-
-    message = choices[0].get("message", {})
-    if not isinstance(message, dict):
-        return []
-
-    tool_calls = message.get("tool_calls")
-    if isinstance(tool_calls, list):
-        return tool_calls
-
-    return []

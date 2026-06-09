@@ -40,20 +40,19 @@ Voice Satellite / Assist UI / Automation
         |
 HA Conversation Agent (per bridge agent)
         |
-Entity Exposure (formats HA state for AI context)
+Entity Exposure (formats HA state + grounding into the system prompt)
         |
-Bridge Client (aiohttp) ──► POST /v1/chat/completions
+Bridge Client (aiohttp) ──► POST /v1/chat/completions  (utterance + caller_context)
         |                          |
-        |                    Agent responds with tool_calls
+        |                    Agent actuates HA itself via its own /api/mcp mount
+        |                    (HA's MCP Server integration), reading + controlling devices
         |                          |
-Tool Executor ◄───────────── execute_service(light.turn_on, light.kitchen)
+HA fires agent_bridge_actuation_audit (EVENT_ACTUATION_AUDIT) per reactive turn
         |
-hass.services.async_call() ──► Actual device control
-        |
-Tool result sent back to agent ──► Final spoken response
+Final spoken response returned to the satellite
 ```
 
-**Design principles:** thin adapter (bridge owns routing, resilience, discovery), HA-native patterns (DataUpdateCoordinator, config flow, entity platforms), no duplication of bridge logic. Tool execution is the critical path -- without it agents describe actions but cannot perform them.
+**Design principles:** thin adapter (bridge owns routing, resilience, discovery), HA-native patterns (DataUpdateCoordinator, config flow, entity platforms), no duplication of bridge logic. **Option A actuation (US0027/US0031):** the agent actuates Home Assistant through its own `/api/mcp` mount, so this integration does **not** run an HA-side tool loop -- it forwards the utterance plus grounding/exposure context and emits a per-turn audit event. Entity exposure is the critical path: without it the agent cannot see or safely target the home.
 
 ## Config
 
@@ -101,7 +100,7 @@ These cause real bugs if ignored:
 1. **All I/O is async** -- use `aiohttp` for HTTP, never `requests`. All HA methods are `async def`.
 2. **Never block the event loop** -- no synchronous HTTP calls, no `time.sleep()`, no blocking file I/O.
 3. **Entity exposure is the key feature** -- without it, agents cannot understand the home. Always include entity state context in conversation prompts.
-4. **Tool execution is how agents control the home** -- agents return `tool_calls` in their response, the integration executes them via `hass.services.async_call()`, and sends results back. Only exposed entities can be targeted.
+4. **The agent actuates HA itself, not via an HA tool loop (Option A, US0027/US0031)** -- the agent reads and controls Home Assistant through its own `/api/mcp` mount (HA's MCP Server integration). This integration forwards the utterance plus grounding/exposure context and fires `EVENT_ACTUATION_AUDIT` per reactive turn; it does **not** parse `tool_calls` or call `hass.services.async_call()` for the agent. Do not reintroduce an HA-side tool executor. (The `agent_bridge.invoke_tool` service is a separate, operator-facing direct call to `/v1/tools/invoke`, not part of the conversation loop.)
 5. **Bridge is the routing layer** -- HA sends `agent` field in chat requests, bridge handles failover/circuit breaking. HA does not replicate bridge resilience logic.
 6. **No hardcoded URLs or tokens** -- everything from config entry data.
 7. **British English** in all comments, docs, and user-facing strings.
