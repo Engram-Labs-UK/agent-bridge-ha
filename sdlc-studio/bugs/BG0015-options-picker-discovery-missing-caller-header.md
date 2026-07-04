@@ -6,7 +6,7 @@ Related: help/bug.md, reference-bug.md
 -->
 # BG0015: Options-flow agent discovery omits the `x-bridge-mcp-caller` header — picker silently degrades on a caller-enforcing bridge
 
-> **Status:** Open
+> **Status:** Fixed
 > **Severity:** Low
 > **Priority:** P3
 > **Reporter:** Code + security review (RV-requested, 2026-07-04)
@@ -52,22 +52,23 @@ Discovery 403s; the fallback returns `{current: current}` and the picker shows o
 
 ## Fix Description
 
-_(to fill on fix)_ Simplest: have `_get_agent_options` call `_discover_agents(self.hass, self._config_entry)` and keep only the label/filter logic locally.
+`_get_agent_options` now delegates discovery to the shared `_discover_agents(self.hass, self._config_entry)` helper (which passes `caller_id=resolve_caller_id(entry)`, ssl-verify option and `include=crew`), keeping only the selectable-filter + label logic locally. The three discovery call sites now share one client construction path (first-run setup remains header-less by design — no entry exists yet).
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| — | — |
+| `config_flow.py` | `_get_agent_options` delegates to `_discover_agents` |
+| `tests/test_config_flow.py` | asserts the options-flow discovery client is built with `caller_id` = default agent |
 
 ---
 
 ## Verification
 
-- [ ] Fix verified in development (unit)
+- [x] Fix verified in development (unit) — TDD: red first, green after; suite 336 passed
 
-**Verified by:** —
-**Verification date:** —
+**Verified by:** unit test (`tests/test_config_flow.py::TestOptionsFlow::test_agent_options_discovery_sends_caller_id`)
+**Verification date:** 2026-07-04
 **Verification depth:** functional
 
 ---

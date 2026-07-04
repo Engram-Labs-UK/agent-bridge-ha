@@ -6,8 +6,8 @@
 
 | Status | Count |
 |--------|-------|
-| Open | 2 |
-| Fixed | 13 |
+| Open | 1 |
+| Fixed | 14 |
 | In Progress | 0 |
 | Closed | 0 |
 | **Total** | **15** |
@@ -30,7 +30,7 @@
 | [BG0012](BG0012-streaming-leaks-confirm-marker.md) | Streaming path speaks the `[confirm:LEVEL]` marker aloud + stores it unstripped in ChatLog | Medium | P2 | Open | conversation.py |
 | [BG0013](BG0013-extract-response-text-crashes-on-malformed-choices.md) | `extract_response_text` raises AttributeError on malformed `choices` payload | Low | P3 | Fixed | helpers.py |
 | [BG0014](BG0014-webhook-handler-crashes-on-non-object-json.md) | Webhook handler raises on valid-JSON-but-non-object payloads | Low | P3 | Fixed | webhook.py |
-| [BG0015](BG0015-options-picker-discovery-missing-caller-header.md) | Options-flow discovery omits caller header — picker degrades on caller-enforcing bridge | Low | P3 | Open | config_flow.py |
+| [BG0015](BG0015-options-picker-discovery-missing-caller-header.md) | Options-flow discovery omits caller header — picker degrades on caller-enforcing bridge | Low | P3 | Fixed | config_flow.py |
 
 ## Notes
 

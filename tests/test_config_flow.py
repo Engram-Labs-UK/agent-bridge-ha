@@ -164,6 +164,32 @@ class TestConfigFlow:
 class TestOptionsFlow:
 
     @pytest.mark.asyncio
+    async def test_agent_options_discovery_sends_caller_id(self):
+        """BG0015: the options-flow discovery client must carry the caller header
+        (BG0004 parity with the subentry flow's _discover_agents)."""
+        entry = MagicMock()
+        entry.data = {
+            CONF_BRIDGE_URL: "http://bridge:18780",
+            CONF_BRIDGE_TOKEN: "tok",
+            CONF_DEFAULT_AGENT: "openclaw-openclaw-cora",
+        }
+        entry.options = {}
+        flow = AgentBridgeOptionsFlow(entry)
+        flow.hass = MagicMock()
+
+        with patch(
+            "custom_components.agent_bridge.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.agent_bridge.config_flow.BridgeClient"
+        ) as MockClient:
+            instance = MockClient.return_value
+            instance.discover = AsyncMock(return_value=[{"id": "cora", "name": "Cora"}])
+            options = await flow._get_agent_options()
+
+        assert options == {"cora": "Cora"}
+        assert MockClient.call_args.kwargs.get("caller_id") == "openclaw-openclaw-cora"
+
+    @pytest.mark.asyncio
     async def test_shows_form(self):
         entry = MagicMock()
         entry.options = {}

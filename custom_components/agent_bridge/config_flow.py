@@ -416,18 +416,14 @@ class AgentBridgeOptionsFlow(OptionsFlow):
         )
 
     async def _get_agent_options(self) -> dict[str, str]:
-        """Discover agents from bridge for the options dropdown."""
+        """Discover agents from bridge for the options dropdown.
+
+        Uses the shared ``_discover_agents`` helper so the ``x-bridge-mcp-caller``
+        header is sent, matching the subentry flow (BG0015 / BG0004 parity), and
+        the picker label stays "name (crew)" (BG0009).
+        """
         try:
-            session = async_get_clientsession(self.hass)
-            client = BridgeClient(
-                session,
-                self._config_entry.data[CONF_BRIDGE_URL],
-                self._config_entry.data[CONF_BRIDGE_TOKEN],
-                timeout=10,
-                ssl_verify=self._config_entry.options.get(CONF_SSL_VERIFY, True),
-            )
-            # include=crew so the options picker label is "name (crew)" (BG0009).
-            agents = await client.discover(include=["crew"])
+            agents = await _discover_agents(self.hass, self._config_entry)
             # Real, selectable agents only -- not models/chatbots/workerbots (CR-0003).
             return {a["id"]: agent_label(a) for a in agents if is_selectable_agent(a)}
         except Exception:
