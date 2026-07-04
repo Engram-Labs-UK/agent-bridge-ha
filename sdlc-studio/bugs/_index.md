@@ -1,16 +1,16 @@
 # Bug Registry
 
-**Last Updated:** 2026-06-09
+**Last Updated:** 2026-07-04
 
 ## Summary
 
 | Status | Count |
 |--------|-------|
-| Open | 0 |
+| Open | 4 |
 | Fixed | 11 |
 | In Progress | 0 |
 | Closed | 0 |
-| **Total** | **11** |
+| **Total** | **15** |
 
 ## Bugs
 
@@ -27,10 +27,16 @@
 | [BG0009](BG0009-first-run-picker-lost-status-label.md) | First-run agent picker lost its health/crew label (BG0005 regression) | Low | P3 | Fixed | config_flow.py |
 | [BG0010](BG0010-brand-icon-wrong-location.md) | Brand icon in wrong location — "icon not available" (needs `brand/` subdir, HA 2026.3+) | Low | P3 | Fixed | brand assets |
 | [BG0011](BG0011-fleet-doctor-warning-too-noisy.md) | Fleet-doctor repair too noisy — persistent warning for a benign idle fleet | Medium | P2 | Fixed | drift.py |
+| [BG0012](BG0012-streaming-leaks-confirm-marker.md) | Streaming path speaks the `[confirm:LEVEL]` marker aloud + stores it unstripped in ChatLog | Medium | P2 | Open | conversation.py |
+| [BG0013](BG0013-extract-response-text-crashes-on-malformed-choices.md) | `extract_response_text` raises AttributeError on malformed `choices` payload | Low | P3 | Open | helpers.py |
+| [BG0014](BG0014-webhook-handler-crashes-on-non-object-json.md) | Webhook handler raises on valid-JSON-but-non-object payloads | Low | P3 | Open | webhook.py |
+| [BG0015](BG0015-options-picker-discovery-missing-caller-header.md) | Options-flow discovery omits caller header — picker degrades on caller-enforcing bridge | Low | P3 | Open | config_flow.py |
 
 ## Notes
 
 - BG0006..BG0009 came from the RV0006 xhigh code review of the 0.10.0 release (2026-06-09). All four are in the CR-0009/BG0005 code shipped this release; fixed together and shipped as 0.10.1.
+
+- BG0012..BG0015 came from the operator-requested full code + security review of 0.11.0 (2026-07-04), alongside CR-0014 (webhook hardening), CR-0015 (client URL-encoding) and CR-0016 (service-layer polish). BG0012 is the priority: the US0033 streaming path and the US0036 confirm-marker contract were never tested together, so a streamed confirmation is spoken with the raw `[confirm:high]` marker and the marker persists in ChatLog history. Streaming is default-off, which caps severity at Medium.
 
 - BG0001 and BG0002 were both resolved by the EP0007 realignment (single-agent setup + options agent picker + per-agent subentries) and closed as Fixed in the Wave 5 backlog reconcile (2026-06-09); the records had simply never been closed. Live UI confirmation lands on the next deploy.
 - BG0001 and BG0002 are related -- fixing both together would simplify the config flow to a single agent selector in setup, with an optional voice agent override in the options flow

@@ -1,26 +1,26 @@
 # Change Request Registry
 
-**Last Updated:** 2026-06-09
+**Last Updated:** 2026-07-04
 **PRD Reference:** [Product Requirements Document](../prd.md)
 
 ## Summary
 
 | Status | Count |
 | --- | --- |
-| Proposed | 1 |
+| Proposed | 4 |
 | Review | 2 |
 | Implemented | 9 |
 | Rejected | 0 |
 | Deferred | 1 |
-| **Total** | **13** |
+| **Total** | **16** |
 
 ## By Priority
 
 | Priority | Proposed | Review | Implemented | Deferred |
 | --- | --- | --- | --- | --- |
 | P1 | 0 | 1 | 1 | 1 |
-| P2 | 0 | 1 | 6 | 0 |
-| P3 | 1 | 0 | 2 | 0 |
+| P2 | 1 | 1 | 6 | 0 |
+| P3 | 3 | 0 | 2 | 0 |
 | P4 | 0 | 0 | 0 | 0 |
 
 > The two remaining **Review** CRs (CR-0002, CR-0004) are **component-complete**: all
@@ -46,6 +46,9 @@
 | [CR-0011](cr0011.md) | Full PRD/TRD/TSD reconcile to post-EP0008/CR-0010 reality | P3 | Proposed | spec-gap | — | 2026-06-09 |
 | [CR-0012](cr0012.md) | Make the fleet-doctor repair issue opt-in (default off) | P2 | Implemented | production-feedback | — | 2026-06-09 |
 | [CR-0013](cr0013.md) | Options-flow refinements — remove Caller ID + Voice debug; session preset dropdown | P3 | Implemented | production-feedback | — | 2026-06-09 |
+| [CR-0014](cr0014.md) | Harden the inbound webhook (local-only, POST-only, validated payloads, persistent id) | P2 | Proposed | design-change | — | 2026-07-04 |
+| [CR-0015](cr0015.md) | URL-encode path parameters in the bridge client | P3 | Proposed | design-change | — | 2026-07-04 |
+| [CR-0016](cr0016.md) | Service-layer and setup polish (default-agent parity, service errors, dead sensor, self-signed onboarding) | P3 | Proposed | design-change | — | 2026-07-04 |
 
 ## Dependencies
 
@@ -57,10 +60,12 @@
 | CR-0004 | EP0007 | Review |
 | CR-0005 | — | — |
 | CR-0006 | — | — |
-| CR-0007 | CR-0006 | Proposed |
+| CR-0007 | CR-0006 | Implemented |
 | CR-0008 | — | — |
 | CR-0009 | CR-0008 | Implemented |
 | CR-0010 | CR-0008 | Implemented |
+| CR-0011 | CR-0014, CR-0015, CR-0016 | Sequencing — docs reconcile runs after the code CRs land |
+| CR-0014 | BG0014 | Bug is Open — webhook shape guard lands first |
 
 ## Notes
 
@@ -73,4 +78,5 @@
 - **CR-0005** is a standalone cosmetic asset swap (Agent Crew brand icon at HA-standard sizes). No epic, no code/test impact; proposed and implemented in the same change.
 - **CR-0006** and **CR-0007** came out of an options-flow "earn its place" review (2026-06-09). CR-0006 culls dead/no-op controls (the agent now actuates via its own `/api/mcp` mount, so the HA-side tool loop and its checkbox are dead); CR-0007 restructures the survivors for usability and depends on CR-0006 landing first.
 - **CR-0008, CR-0009, CR-0010** came out of an inverse review (2026-06-09): what bridge capabilities the integration doesn't yet surface. The integration is baselined against bridge v4.36 but the live bridge is v4.137, so CR-0008 (re-baseline + capability audit, P1) is the hygiene gate; CR-0009 (usage/cost + doctor) and CR-0010 (agent memory) build on it. Proactive (US0037) and multimodal (US0035/38) were already covered by EP0008 and deliberately not re-filed; async long-running tasks (`POST /v1/messages`) is parked as a future candidate (noted in CR-0008).
+- **CR-0014, CR-0015, CR-0016** came from the operator-requested full code + security review of 0.11.0 (2026-07-04), alongside bugs BG0012–BG0015. CR-0014 is the security priority (the webhook is the one unauthenticated inbound surface); CR-0015 and CR-0016 are hardening/polish. Related: BG0014 fixes the webhook crash path that CR-0014's validation items sit behind.
 - Status values in use: `Proposed` | `Review` | `Implemented` | `Rejected` | `Deferred`. Use `/sdlc-studio cr close --cr CR-NNNN` to move a CR to a terminal state.
