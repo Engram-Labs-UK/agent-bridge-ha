@@ -42,6 +42,12 @@ def _map_tristate(value: Any, fallback: str) -> str:
     return _TRISTATE_MAP.get(value.lower(), fallback)
 
 
+# CR-0014: the only status values a webhook push may write into coordinator data.
+# The webhook is unauthenticated (the id is the credential), so pushed values are
+# validated against the known health vocabulary before they reach sensor state.
+_VALID_PUSH_STATUSES = frozenset(_TRISTATE_MAP) | frozenset(_TRISTATE_MAP.values())
+
+
 class AgentInfo(TypedDict):
     """Typed agent information from bridge discovery (v4.36 surface, US0028)."""
 
@@ -353,16 +359,25 @@ class AgentBridgeCoordinator(DataUpdateCoordinator[CoordinatorData]):
         if not self.data:
             return
 
-        # Bridge-level status push.
+        # Bridge-level status push. CR-0014: unauthenticated input -- only known
+        # health-vocabulary values may become sensor state.
         if "status" in data:
-            updated = CoordinatorData(**{**self.data, "bridge_status": data["status"]})
+            status = data["status"]
+            if not isinstance(status, str) or status.lower() not in _VALID_PUSH_STATUSES:
+                _LOGGER.debug("Ignoring webhook status push with invalid value: %r", status)
+                return
+            updated = CoordinatorData(**{**self.data, "bridge_status": status})
             self.async_set_updated_data(updated)
             return
 
         # Per-agent health-changed push: {"agentId": ..., "healthy": bool}.
         agent_id = data.get("agentId", data.get("agent_id"))
         if agent_id is not None and "healthy" in data:
-            healthy_flag = bool(data["healthy"])
+            healthy_flag = data["healthy"]
+            # CR-0014: require the documented shape exactly; ignore anything else.
+            if not isinstance(agent_id, str) or not isinstance(healthy_flag, bool):
+                _LOGGER.debug("Ignoring malformed webhook health push: %r", data)
+                return
             known_ids = {a["id"] for a in self.data["agents"]}
             if agent_id not in known_ids:
                 # Unknown agent -- don't no-op; pull a fresh poll instead.

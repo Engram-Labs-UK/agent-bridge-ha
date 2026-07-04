@@ -32,6 +32,10 @@ CONF_THINKING_TIMEOUT = "thinking_timeout"
 CONF_SSL_VERIFY = "ssl_verify"
 # Opt-in fleet-doctor repair issue (CR-0012). Off by default; an operator diagnostic.
 CONF_DOCTOR_ALERTS = "doctor_alerts"
+# Bridge-side webhook subscription id, persisted so a subscription leaked by an
+# unclean shutdown is cleaned up on the next start (CR-0014). The webhook id
+# itself persists under HA's standard CONF_WEBHOOK_ID key.
+CONF_WEBHOOK_SUBSCRIPTION_ID = "webhook_subscription_id"
 # Seconds; idle gap that rotates the session channel key (US0032).
 CONF_SESSION_IDLE_WINDOW = "session_idle_window"
 # Stream the agent reply to TTS as deltas (US0033). Opt-in; falls back to
