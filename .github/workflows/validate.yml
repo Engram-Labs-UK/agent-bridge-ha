@@ -59,7 +59,12 @@ jobs:
           # install their requirements explicitly:
           #   conversation -> hassil, home-assistant-intents
           #   camera / ai_task (EP0008 vision + AI Task) -> PyTurboJPEG
-          pip install hassil home-assistant-intents "PyTurboJPEG==1.7.5"
+          # BG0016: hassil/intents MUST match the pinned HA's conversation
+          # manifest (homeassistant/components/conversation/manifest.json for
+          # HA_VERSION) -- unpinned, a newer intents release breaks the import
+          # (e.g. FuzzyConfig removed/added across versions). Bump these two
+          # together with HA_VERSION (Critical Rule 9 applies here too).
+          pip install "hassil==3.5.0" "home-assistant-intents==2026.1.28" "PyTurboJPEG==1.7.5"
 
       - name: Run tests
         run: python -m pytest tests/ -q

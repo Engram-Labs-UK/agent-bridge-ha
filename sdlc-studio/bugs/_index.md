@@ -7,10 +7,10 @@
 | Status | Count |
 |--------|-------|
 | Open | 0 |
-| Fixed | 15 |
+| Fixed | 16 |
 | In Progress | 0 |
 | Closed | 0 |
-| **Total** | **15** |
+| **Total** | **16** |
 
 ## Bugs
 
@@ -31,6 +31,7 @@
 | [BG0013](BG0013-extract-response-text-crashes-on-malformed-choices.md) | `extract_response_text` raises AttributeError on malformed `choices` payload | Low | P3 | Fixed | helpers.py |
 | [BG0014](BG0014-webhook-handler-crashes-on-non-object-json.md) | Webhook handler raises on valid-JSON-but-non-object payloads | Low | P3 | Fixed | webhook.py |
 | [BG0015](BG0015-options-picker-discovery-missing-caller-header.md) | Options-flow discovery omits caller header — picker degrades on caller-enforcing bridge | Low | P3 | Fixed | config_flow.py |
+| [BG0016](BG0016-ci-unpinned-intents-breaks-conversation-import.md) | CI installs hassil/intents unpinned — newer intents release breaks the conversation import, failing every run | Medium | P2 | Fixed | validate.yml |
 
 ## Notes
 
