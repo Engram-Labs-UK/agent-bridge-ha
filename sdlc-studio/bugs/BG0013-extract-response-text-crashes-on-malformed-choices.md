@@ -67,7 +67,7 @@ Added `isinstance(choices[0], dict)` to the fast-path guard; a non-dict first ch
 
 - [x] Fix verified in development (unit) — TDD: 4 tests red first, green after; full suite 330 passed
 
-**Verified by:** unit tests (`tests/test_helpers.py::TestExtractResponseText::test_non_dict_first_choice_*`)
+**Verified by:** regression tests, unit-level (`tests/test_helpers.py::TestExtractResponseText::test_non_dict_first_choice_*`) — seen red against the unfixed code (mutation-checked by TDD)
 **Verification date:** 2026-07-04
 **Verification depth:** functional
 

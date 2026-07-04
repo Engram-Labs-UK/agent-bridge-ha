@@ -66,7 +66,7 @@ After the JSON parse, `if not isinstance(payload, dict): return Response(status=
 
 - [x] Fix verified in development (unit) — TDD: 5 parametrised cases red first, green after; suite 335 passed
 
-**Verified by:** unit tests (`tests/test_webhook.py::TestHandleWebhook::test_non_object_json_payload_is_400`)
+**Verified by:** regression tests (`tests/test_webhook.py::TestHandleWebhook::test_non_object_json_payload_is_400`) — seen red against the unfixed code (mutation-checked by TDD)
 **Verification date:** 2026-07-04
 **Verification depth:** functional
 
