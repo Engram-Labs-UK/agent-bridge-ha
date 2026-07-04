@@ -42,15 +42,29 @@ async def async_register_webhook(
             entry, data={**entry.data, CONF_WEBHOOK_ID: webhook_id}
         )
 
-    webhook.async_register(
-        hass,
-        DOMAIN,
-        "Agent Bridge",
-        webhook_id,
-        _handle_webhook,
-        local_only=True,
-        allowed_methods=["POST"],
-    )
+    try:
+        webhook.async_register(
+            hass,
+            DOMAIN,
+            "Agent Bridge",
+            webhook_id,
+            _handle_webhook,
+            local_only=True,
+            allowed_methods=["POST"],
+        )
+    except ValueError:
+        # The persistent id is already registered (a mid-setup failure earlier in
+        # this run never unloaded). Replace the stale handler rather than fail.
+        webhook.async_unregister(hass, webhook_id)
+        webhook.async_register(
+            hass,
+            DOMAIN,
+            "Agent Bridge",
+            webhook_id,
+            _handle_webhook,
+            local_only=True,
+            allowed_methods=["POST"],
+        )
 
     _LOGGER.debug("Registered HA webhook: %s", webhook_id)
     return webhook_id

@@ -76,8 +76,15 @@ The marker is spoken aloud by the satellite, persists in the ChatLog assistant t
 
 ---
 
+## Known Limitation (critic observation, non-blocking)
+
+A degenerate stream containing ONLY the marker (`[confirm:high]`, no text) yields no content deltas, so ChatLog adds no assistant turn and the non-streaming fallback re-sends the turn (one duplicate bridge request); severity is then recovered from the fallback response. Low realism — the safety prompt mandates a question with the marker. Fix if it ever bites: check `severity_holder` before falling back.
+
+---
+
 ## Revision History
 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-07-04 | Code + security review | Found reviewing the US0033/US0036 interaction; no test covers streaming + confirm |
+| 2026-07-04 | Sprint SPRINT-2026-07-04 | Fixed (TDD + adversarial critic property-probe ~4000 chunkings, APPROVE) |

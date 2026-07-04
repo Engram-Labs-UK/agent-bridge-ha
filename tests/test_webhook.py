@@ -82,6 +82,25 @@ class TestAsyncRegisterWebhook:
         assert mock_register.call_args.args[3] == "wh_persisted"
 
     @pytest.mark.asyncio
+    async def test_already_registered_id_is_replaced(self):
+        """CR-0014 risk mitigation: a persisted id still registered from a
+        failed same-run setup is unregistered and re-registered, not fatal."""
+        hass = MagicMock()
+        entry = _entry(data={"webhook_id": "wh_persisted"})
+
+        with patch(
+            "custom_components.agent_bridge.webhook.webhook.async_register",
+            side_effect=[ValueError("Handler is already defined!"), None],
+        ) as mock_register, patch(
+            "custom_components.agent_bridge.webhook.webhook.async_unregister",
+        ) as mock_unregister:
+            result = await async_register_webhook(hass, entry)
+
+        assert result == "wh_persisted"
+        mock_unregister.assert_called_once_with(hass, "wh_persisted")
+        assert mock_register.call_count == 2
+
+    @pytest.mark.asyncio
     async def test_webhook_id_not_logged_at_info(self, caplog):
         """CR-0014 Item 4: the id is the credential -- never at INFO."""
         import logging
