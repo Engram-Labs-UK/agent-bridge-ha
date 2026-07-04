@@ -10,6 +10,7 @@ This is the canonical agent-instructions file, read every session (by Claude Cod
 2. Read the operating doctrine once per project: `reference-doctrine.md` in the sdlc-studio skill - the project-agnostic rules this file does not restate.
 3. `/sdlc-studio status` for the four pillars; `/sdlc-studio hint` for the next step; `/sdlc-studio lessons recall` before substantive decisions.
 4. After any context compaction or reset (`/compact`, `/clear`, or a fresh session), re-read `LATEST.md` and run `/sdlc-studio status` before continuing.
+5. **Product PVD is projected here read-only.** `sdlc-studio/product/pvd.md` is a read-only copy of the master in `engram-labs-product`; run `bash sdlc-studio/product/check-pvd-drift.sh` to confirm it is current. Never edit the projection - re-sync from the master instead.
 
 ## How to work
 
