@@ -523,7 +523,9 @@ def _may_be_confirm_prefix(text: str) -> bool:
     """Whether ``text`` could still grow into a leading ``[confirm:LEVEL]`` marker."""
     head = text.lstrip()
     if not head:
-        return True  # whitespace only so far
+        # Whitespace only so far -- still possible, but bounded by the same
+        # probe cap so a pathological all-whitespace stream cannot buffer forever.
+        return len(text) <= _MARKER_PROBE_MAX
     prefix = "[confirm:"
     if len(head) < len(prefix):
         return prefix.startswith(head)

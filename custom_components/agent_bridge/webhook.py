@@ -89,8 +89,10 @@ async def async_cleanup_stale_subscription(
     try:
         await client.unregister_webhook(stale)
         _LOGGER.debug("Unregistered stale bridge webhook subscription: %s", stale)
-    except Exception:
-        _LOGGER.debug("Stale bridge webhook subscription cleanup failed (ignored): %s", stale)
+    except Exception as err:
+        _LOGGER.debug(
+            "Stale bridge webhook subscription cleanup failed (ignored): %s (%s)", stale, err
+        )
 
 
 async def async_register_with_bridge(

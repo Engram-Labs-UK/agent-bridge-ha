@@ -445,3 +445,14 @@ class TestConfirmMarkerStreaming:
     async def test_severity_holder_optional(self):
         out = await self._run(["[confirm:low] ok"])
         assert [d for d in out[1:]] == [{"content": "ok"}]
+
+    @pytest.mark.asyncio
+    async def test_whitespace_only_stream_bounded_and_flushed(self):
+        """Copilot review (PR #17): an all-whitespace stream must not buffer
+        beyond the probe cap; buffered whitespace flushes on resolution."""
+        holder = {}
+        out = await self._run(["   "] * 20, holder)
+        # After the cap the stream stops buffering and passes whitespace through.
+        text = "".join(d["content"] for d in out[1:])
+        assert text  # whitespace was emitted, not swallowed
+        assert holder.get("severity") is None
