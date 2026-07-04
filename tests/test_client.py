@@ -335,3 +335,45 @@ class TestObservabilityEndpoints:
         result = await client.doctor()
         assert captured["url"].endswith("/v1/doctor")
         assert result["verdict"] == "HEALTHY"
+
+
+class TestPathQuoting:
+    """CR-0015: path-interpolated identifiers are URL-encoded (safe by construction)."""
+
+    def _capture(self, client, mock_response):
+        resp = mock_response(json_data={"ok": True})
+        captured = {}
+        client._session.request = MagicMock(
+            side_effect=lambda method, url, **kw: captured.update(method=method, url=url) or resp
+        )
+        return captured
+
+    @pytest.mark.asyncio
+    async def test_agent_usage_quotes_agent_id(self, client, mock_response):
+        captured = self._capture(client, mock_response)
+        await client.agent_usage("../doctor")
+        assert captured["url"].endswith("/v1/agents/..%2Fdoctor/usage")
+
+    @pytest.mark.asyncio
+    async def test_memory_record_quotes_agent_id(self, client, mock_response):
+        captured = self._capture(client, mock_response)
+        await client.memory_record("a/b?c", "note")
+        assert captured["url"].endswith("/v1/agents/a%2Fb%3Fc/memory")
+
+    @pytest.mark.asyncio
+    async def test_memory_recall_quotes_agent_id_and_query(self, client, mock_response):
+        captured = self._capture(client, mock_response)
+        await client.memory_recall("a/b", query="back door")
+        assert captured["url"].endswith("/v1/agents/a%2Fb/memory?q=back%20door")
+
+    @pytest.mark.asyncio
+    async def test_unregister_webhook_quotes_subscription_id(self, client, mock_response):
+        captured = self._capture(client, mock_response)
+        await client.unregister_webhook("sub/../evil")
+        assert captured["url"].endswith("/v1/webhooks/sub%2F..%2Fevil")
+
+    @pytest.mark.asyncio
+    async def test_well_formed_ids_unchanged(self, client, mock_response):
+        captured = self._capture(client, mock_response)
+        await client.agent_usage("openclaw-openclaw-cora")
+        assert captured["url"].endswith("/v1/agents/openclaw-openclaw-cora/usage")

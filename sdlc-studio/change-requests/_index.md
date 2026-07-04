@@ -7,9 +7,9 @@
 
 | Status | Count |
 | --- | --- |
-| Proposed | 4 |
+| Proposed | 3 |
 | Review | 2 |
-| Implemented | 9 |
+| Implemented | 10 |
 | Rejected | 0 |
 | Deferred | 1 |
 | **Total** | **16** |
@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- |
 | P1 | 0 | 1 | 1 | 1 |
 | P2 | 1 | 1 | 6 | 0 |
-| P3 | 3 | 0 | 2 | 0 |
+| P3 | 2 | 0 | 3 | 0 |
 | P4 | 0 | 0 | 0 | 0 |
 
 > The two remaining **Review** CRs (CR-0002, CR-0004) are **component-complete**: all
@@ -47,7 +47,7 @@
 | [CR-0012](cr0012.md) | Make the fleet-doctor repair issue opt-in (default off) | P2 | Implemented | production-feedback | — | 2026-06-09 |
 | [CR-0013](cr0013.md) | Options-flow refinements — remove Caller ID + Voice debug; session preset dropdown | P3 | Implemented | production-feedback | — | 2026-06-09 |
 | [CR-0014](cr0014.md) | Harden the inbound webhook (local-only, POST-only, validated payloads, persistent id) | P2 | Proposed | design-change | — | 2026-07-04 |
-| [CR-0015](cr0015.md) | URL-encode path parameters in the bridge client | P3 | Proposed | design-change | — | 2026-07-04 |
+| [CR-0015](cr0015.md) | URL-encode path parameters in the bridge client | P3 | Implemented | design-change | — | 2026-07-04 |
 | [CR-0016](cr0016.md) | Service-layer and setup polish (default-agent parity, service errors, dead sensor, self-signed onboarding) | P3 | Proposed | design-change | — | 2026-07-04 |
 
 ## Dependencies
