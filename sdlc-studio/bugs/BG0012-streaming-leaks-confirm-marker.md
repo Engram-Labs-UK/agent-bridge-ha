@@ -6,7 +6,7 @@ Related: help/bug.md, reference-bug.md
 -->
 # BG0012: Streaming path speaks the `[confirm:LEVEL]` marker aloud and stores it unstripped in the ChatLog
 
-> **Status:** Open
+> **Status:** Fixed
 > **Severity:** Medium
 > **Priority:** P2
 > **Reporter:** Code + security review (RV-requested, 2026-07-04)
@@ -53,23 +53,25 @@ The marker is spoken aloud by the satellite, persists in the ChatLog assistant t
 
 ## Fix Description
 
-_(to fill on fix)_ Suggested approach: buffer the first chunk(s) in `_to_delta_stream` until either the `_CONFIRM_MARKER` regex matches (strip, record severity, then yield the remainder) or enough text has arrived to rule a marker out, then pass through. The recorded severity feeds the existing event/continue logic; the ChatLog then stores clean text for free.
+`_to_delta_stream` now buffers the head of the stream only while it could still be a leading `[confirm:LEVEL]` marker (bounded probe, `_MARKER_PROBE_MAX` = 24 chars): a completed marker is stripped and its severity recorded in a caller-supplied `severity_out` holder before ANY content delta is emitted; non-marker text flushes unchanged (byte-identical passthrough pinned by tests). The streaming branch of `_async_handle_message` reads the severity from the holder instead of post-parsing the assembled text, so TTS never speaks the marker and the stored ChatLog turn (next-turn bridge history) is clean. Unknown levels (e.g. `[confirm:banana]`) pass through untouched, matching `_parse_confirm_marker`. A marker chunk ending exactly at `]` also lstrips the next chunk so TTS does not start mid-pause.
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| — | — |
+| `conversation.py` | `_may_be_confirm_prefix` + buffering/strip in `_to_delta_stream(deltas, severity_out)`; streaming branch uses the holder |
+| `tests/test_streaming.py` | `TestConfirmMarkerStreaming` — 8 unit cases (split-chunk, single-chunk, unknown level, passthrough, marker-only, bracket-text, optional holder) |
+| `tests/test_conversation_integration.py` | `TestStreamingConfirmMarker` — end-to-end: clean ChatLog turn + clean speech + severity/continue surfaced, no fallback |
 
 ---
 
 ## Verification
 
-- [ ] Fix verified in development (unit)
-- [ ] Live: streamed confirm reply is spoken without the marker
+- [x] Fix verified in development (unit) — TDD: 8 red tests first, green after; suite 349 passed
+- [ ] Live: streamed confirm reply is spoken without the marker (operator-gated; streaming is opt-in)
 
-**Verified by:** —
-**Verification date:** —
+**Verified by:** unit + integration tests (`TestConfirmMarkerStreaming`, `TestStreamingConfirmMarker`)
+**Verification date:** 2026-07-04
 **Verification depth:** functional
 
 ---

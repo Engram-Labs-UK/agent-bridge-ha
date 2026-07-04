@@ -375,3 +375,73 @@ class TestToDeltaStream:
 
         out = [d async for d in _to_delta_stream(deltas())]
         assert out == [{"role": "assistant"}]
+
+
+class TestConfirmMarkerStreaming:
+    """BG0012: a leading [confirm:LEVEL] marker is stripped BEFORE any delta
+    reaches the ChatLog/TTS stream, and the severity is surfaced to the caller."""
+
+    @staticmethod
+    async def _run(chunks, holder=None):
+        async def deltas():
+            for c in chunks:
+                yield c
+
+        return [d async for d in _to_delta_stream(deltas(), holder)]
+
+    @pytest.mark.asyncio
+    async def test_marker_split_across_chunks_stripped(self):
+        holder = {}
+        out = await self._run(["[confirm:", "high] ", "Shall I unlock", " the door?"], holder)
+        assert out[0] == {"role": "assistant"}
+        text = "".join(d["content"] for d in out[1:])
+        assert "[confirm:" not in text
+        assert text == "Shall I unlock the door?"
+        assert holder.get("severity") == "high"
+
+    @pytest.mark.asyncio
+    async def test_marker_in_single_chunk_stripped(self):
+        holder = {}
+        out = await self._run(["[confirm:normal] All good?"], holder)
+        assert [d for d in out[1:]] == [{"content": "All good?"}]
+        assert holder.get("severity") == "normal"
+
+    @pytest.mark.asyncio
+    async def test_unknown_level_left_untouched(self):
+        holder = {}
+        out = await self._run(["[confirm:banana] hm"], holder)
+        text = "".join(d["content"] for d in out[1:])
+        assert text == "[confirm:banana] hm"
+        assert holder.get("severity") is None
+
+    @pytest.mark.asyncio
+    async def test_no_marker_stream_unchanged(self):
+        holder = {}
+        out = await self._run(["Hello", " ", "world"], holder)
+        assert out == [
+            {"role": "assistant"},
+            {"content": "Hello"},
+            {"content": " "},
+            {"content": "world"},
+        ]
+        assert holder.get("severity") is None
+
+    @pytest.mark.asyncio
+    async def test_marker_only_stream(self):
+        holder = {}
+        out = await self._run(["[confirm:high]"], holder)
+        assert out == [{"role": "assistant"}]
+        assert holder.get("severity") == "high"
+
+    @pytest.mark.asyncio
+    async def test_plain_bracket_text_not_swallowed(self):
+        holder = {}
+        out = await self._run(["[con", "sider] this"], holder)
+        text = "".join(d["content"] for d in out[1:])
+        assert text == "[consider] this"
+        assert holder.get("severity") is None
+
+    @pytest.mark.asyncio
+    async def test_severity_holder_optional(self):
+        out = await self._run(["[confirm:low] ok"])
+        assert [d for d in out[1:]] == [{"content": "ok"}]

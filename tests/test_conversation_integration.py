@@ -471,3 +471,43 @@ class TestActuationSafetyAndAudit:
         assert data["agent_id"] == "cora"
         assert data["conversation_id"] == "conv-1"
         assert data["risky_domains_exposed"] == ["lock"]
+
+
+class TestStreamingConfirmMarker:
+    """BG0012: streaming + [confirm:LEVEL] -- the marker must never reach the
+    delta stream (TTS) or persist in the stored ChatLog turn."""
+
+    @pytest.mark.asyncio
+    async def test_streamed_marker_stripped_everywhere(self, hass):
+        client = MagicMock()
+
+        async def fake_stream(*args, **kwargs):
+            async def gen():
+                for chunk in ["[confirm:", "high] ", "Shall I unlock", " the door?"]:
+                    yield chunk
+
+            return gen()
+
+        client.chat_stream = fake_stream
+        client.chat = AsyncMock()
+        entity = TestStreaming._streaming_entity(client, hass)
+        chat_log = ChatLog(hass, "conv-1")
+
+        events = []
+        hass.bus.async_listen(EVENT_MESSAGE_RECEIVED, lambda e: events.append(e))
+
+        p1, p2 = _patch_grounding()
+        with p1, p2:
+            result = await entity._async_handle_message(_conversation_input(), chat_log)
+        await hass.async_block_till_done()
+
+        # Stored assistant turn is clean (it feeds next-turn history to the bridge).
+        assistant = [c for c in chat_log.content if c.role == "assistant"]
+        assert len(assistant) == 1
+        assert assistant[0].content == "Shall I unlock the door?"
+        # Spoken text clean; severity surfaced; conversation kept open; no fallback.
+        assert result.response.speech["plain"]["speech"] == "Shall I unlock the door?"
+        assert result.continue_conversation is True
+        assert events[0].data["severity"] == "high"
+        assert events[0].data["awaiting_confirmation"] is True
+        client.chat.assert_not_called()
