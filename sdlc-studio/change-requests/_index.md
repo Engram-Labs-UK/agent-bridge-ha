@@ -7,9 +7,9 @@
 
 | Status | Count |
 | --- | --- |
-| Proposed | 1 |
+| Proposed | 0 |
 | Review | 2 |
-| Implemented | 12 |
+| Implemented | 13 |
 | Rejected | 0 |
 | Deferred | 1 |
 | **Total** | **16** |
@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- |
 | P1 | 0 | 1 | 1 | 1 |
 | P2 | 0 | 1 | 7 | 0 |
-| P3 | 1 | 0 | 4 | 0 |
+| P3 | 0 | 0 | 5 | 0 |
 | P4 | 0 | 0 | 0 | 0 |
 
 > The two remaining **Review** CRs (CR-0002, CR-0004) are **component-complete**: all
@@ -43,7 +43,7 @@
 | [CR-0008](cr0008.md) | Re-baseline to bridge v4.141 + capability audit | P1 | Implemented | spec-gap | — | 2026-06-09 |
 | [CR-0009](cr0009.md) | Surface bridge usage/cost and fleet doctor in HA | P2 | Implemented | feature-request | — | 2026-06-09 |
 | [CR-0010](cr0010.md) | Agent memory record/recall from Home Assistant | P2 | Implemented | feature-request | — | 2026-06-09 |
-| [CR-0011](cr0011.md) | Full PRD/TRD/TSD reconcile to post-EP0008/CR-0010 reality | P3 | Proposed | spec-gap | — | 2026-06-09 |
+| [CR-0011](cr0011.md) | Full PRD/TRD/TSD reconcile to post-EP0008/CR-0010 reality | P3 | Implemented | spec-gap | — | 2026-06-09 |
 | [CR-0012](cr0012.md) | Make the fleet-doctor repair issue opt-in (default off) | P2 | Implemented | production-feedback | — | 2026-06-09 |
 | [CR-0013](cr0013.md) | Options-flow refinements — remove Caller ID + Voice debug; session preset dropdown | P3 | Implemented | production-feedback | — | 2026-06-09 |
 | [CR-0014](cr0014.md) | Harden the inbound webhook (local-only, POST-only, validated payloads, persistent id) | P2 | Implemented | design-change | — | 2026-07-04 |
@@ -64,7 +64,7 @@
 | CR-0008 | — | — |
 | CR-0009 | CR-0008 | Implemented |
 | CR-0010 | CR-0008 | Implemented |
-| CR-0011 | CR-0014, CR-0015, CR-0016 | Sequencing — docs reconcile runs after the code CRs land |
+| CR-0011 | CR-0014, CR-0015, CR-0016 | Implemented, Implemented, Implemented |
 | CR-0014 | BG0014 | Fixed |
 
 ## Notes
