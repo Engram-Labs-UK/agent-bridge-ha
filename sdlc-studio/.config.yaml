@@ -1,0 +1,19 @@
+# SDLC Studio project configuration (see reference-config.md).
+# Added at the SPRINT-2026-07-04 closing gate (RV0007).
+
+# This project's established status vocabulary extensions (files are truth:
+# 14 CRs use "Implemented"; CR-0002/CR-0004 + EP0007/EP0008 use "Review" for
+# component-complete-but-externally-gated). Declared rather than rewriting
+# history.
+status_vocab:
+  cr:
+    - Implemented
+    - Review
+  epic:
+    - Review
+
+conformance:
+  # The verified/critiqued discipline was adopted at SPRINT-2026-07-04; the
+  # EP0001-EP0008 stories (US0001-US0039) predate it and carry their own
+  # epic-level review trail (RV0001-RV0006). Forward-only from here.
+  adopt_after: US0039

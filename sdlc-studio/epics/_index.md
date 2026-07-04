@@ -11,8 +11,8 @@
 | Proposed | 0 |
 | Ready | 0 |
 | Approved | 0 |
-| In Progress | 1 |
-| Review | 1 |
+| In Progress | 0 |
+| Review | 2 |
 | Done | 6 |
 | **Total** | **8** |
 
@@ -27,7 +27,7 @@
 | [EP0005](EP0005-realtime-and-broadcast.md) | Real-Time & Broadcast | Done | Darren Benson | 2 | 0.2.0 |
 | [EP0006](EP0006-advanced-voice.md) | Advanced Voice | Done | Darren Benson | 1 | 0.2.0 |
 | [EP0007](EP0007-bridge-v436-modern-ha-realignment.md) | Bridge v4.36 + Modern HA Re-Alignment | Review | Darren Benson | 11 | 0.2.0 |
-| [EP0008](EP0008-conversation-capability-expansion.md) | Conversation Capability Expansion | In Progress | Darren Benson | 8 | 0.5.0–0.10.0 |
+| [EP0008](EP0008-conversation-capability-expansion.md) | Conversation Capability Expansion | Review | Darren Benson | 8 | 0.5.0–0.10.0 |
 
 ## Dependency Graph
 

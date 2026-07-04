@@ -52,20 +52,13 @@
 
 ## Dependencies
 
-| CR | Depends On | Dependency Status |
-| --- | --- | --- |
-| CR-0001 | BG0001, BG0002 | Fixed, Fixed |
-| CR-0002 | EP0002, EP0004 | Done, Done |
-| CR-0003 | — | — |
-| CR-0004 | EP0007 | Review |
-| CR-0005 | — | — |
-| CR-0006 | — | — |
-| CR-0007 | CR-0006 | Implemented |
-| CR-0008 | — | — |
-| CR-0009 | CR-0008 | Implemented |
-| CR-0010 | CR-0008 | Implemented |
-| CR-0011 | CR-0014, CR-0015, CR-0016 | Implemented, Implemented, Implemented |
-| CR-0014 | BG0014 | Fixed |
+Declared `Depends on:` edges (authoritative in each CR file; listed as prose so the
+index parser does not read them as duplicate CR rows — see RETRO0001):
+
+- CR-0001 ← BG0001, BG0002 (both Fixed) · CR-0002 ← EP0002, EP0004 (both Done) · CR-0004 ← EP0007 (Review)
+- CR-0007 ← CR-0006 · CR-0009 ← CR-0008 · CR-0010 ← CR-0008 (all Implemented)
+- CR-0011 ← CR-0014, CR-0015, CR-0016 (sequencing: docs reconcile after the code CRs; all Implemented)
+- CR-0014 ← BG0014 (Fixed; the webhook shape guard landed first)
 
 ## Notes
 
