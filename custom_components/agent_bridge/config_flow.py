@@ -96,6 +96,9 @@ STEP_USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_BRIDGE_URL, default=DEFAULT_BRIDGE_URL): str,
         vol.Required(CONF_BRIDGE_TOKEN): str,
+        # CR-0016: a self-signed HTTPS bridge must be able to onboard -- the
+        # options toggle is unreachable if the first connection check fails.
+        vol.Optional(CONF_SSL_VERIFY, default=True): bool,
     }
 )
 
@@ -109,6 +112,7 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
         """Initialise the config flow."""
         self._bridge_url: str = ""
         self._bridge_token: str = ""
+        self._ssl_verify: bool = True
         self._agents: list[dict[str, Any]] = []
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -118,9 +122,10 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             url = user_input[CONF_BRIDGE_URL].rstrip("/")
             token = user_input[CONF_BRIDGE_TOKEN]
+            ssl_verify = user_input.get(CONF_SSL_VERIFY, True)
 
             session = async_get_clientsession(self.hass)
-            client = BridgeClient(session, url, token, timeout=10, ssl_verify=True)
+            client = BridgeClient(session, url, token, timeout=10, ssl_verify=ssl_verify)
 
             try:
                 alive = await client.check_alive()
@@ -135,6 +140,7 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                     else:
                         self._bridge_url = url
                         self._bridge_token = token
+                        self._ssl_verify = ssl_verify
                         return await self.async_step_agents()
             except BridgeAuthError:
                 errors["base"] = "invalid_auth"
@@ -167,7 +173,7 @@ class AgentBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                 options={
                     CONF_CONTEXT_MAX_CHARS: DEFAULT_CONTEXT_MAX_CHARS,
                     CONF_THINKING_TIMEOUT: DEFAULT_THINKING_TIMEOUT,
-                    CONF_SSL_VERIFY: True,
+                    CONF_SSL_VERIFY: self._ssl_verify,
                 },
             )
 

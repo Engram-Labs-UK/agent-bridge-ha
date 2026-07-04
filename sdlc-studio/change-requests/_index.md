@@ -7,9 +7,9 @@
 
 | Status | Count |
 | --- | --- |
-| Proposed | 2 |
+| Proposed | 1 |
 | Review | 2 |
-| Implemented | 11 |
+| Implemented | 12 |
 | Rejected | 0 |
 | Deferred | 1 |
 | **Total** | **16** |
@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- |
 | P1 | 0 | 1 | 1 | 1 |
 | P2 | 0 | 1 | 7 | 0 |
-| P3 | 2 | 0 | 3 | 0 |
+| P3 | 1 | 0 | 4 | 0 |
 | P4 | 0 | 0 | 0 | 0 |
 
 > The two remaining **Review** CRs (CR-0002, CR-0004) are **component-complete**: all
@@ -48,7 +48,7 @@
 | [CR-0013](cr0013.md) | Options-flow refinements — remove Caller ID + Voice debug; session preset dropdown | P3 | Implemented | production-feedback | — | 2026-06-09 |
 | [CR-0014](cr0014.md) | Harden the inbound webhook (local-only, POST-only, validated payloads, persistent id) | P2 | Implemented | design-change | — | 2026-07-04 |
 | [CR-0015](cr0015.md) | URL-encode path parameters in the bridge client | P3 | Implemented | design-change | — | 2026-07-04 |
-| [CR-0016](cr0016.md) | Service-layer and setup polish (default-agent parity, service errors, dead sensor, self-signed onboarding) | P3 | Proposed | design-change | — | 2026-07-04 |
+| [CR-0016](cr0016.md) | Service-layer and setup polish (default-agent parity, service errors, dead sensor, self-signed onboarding) | P3 | Implemented | design-change | — | 2026-07-04 |
 
 ## Dependencies
 

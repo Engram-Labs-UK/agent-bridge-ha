@@ -87,7 +87,7 @@ ask_with_image:
           domain: camera
     agent_id:
       name: Agent ID
-      description: Optional agent to ask (defaults to the bridge's routing).
+      description: The agent to ask. Defaults to the configured default agent.
       required: false
       example: "cora"
       selector:

@@ -161,6 +161,59 @@ class TestConfigFlow:
         assert result["data"][CONF_VOICE_AGENT] == "cora"
 
 
+class TestSetupSslVerify:
+    """CR-0016 Item 4: self-signed bridges can onboard -- SSL verify is a
+    first-run choice (default on), stored into the created entry's options."""
+
+    @pytest.mark.asyncio
+    async def test_user_step_ssl_verify_disabled(self):
+        flow = AgentBridgeConfigFlow()
+        flow.hass = MagicMock()
+
+        with patch(
+            "custom_components.agent_bridge.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.agent_bridge.config_flow.BridgeClient"
+        ) as MockClient:
+            instance = MockClient.return_value
+            instance.check_alive = AsyncMock(return_value=True)
+            instance.discover = AsyncMock(return_value=[{"id": "cora", "name": "Cora"}])
+
+            result = await flow.async_step_user(
+                {
+                    CONF_BRIDGE_URL: "https://bridge:18780",
+                    CONF_BRIDGE_TOKEN: "tok",
+                    "ssl_verify": False,
+                }
+            )
+        assert result["step_id"] == "agents"
+        assert MockClient.call_args.kwargs.get("ssl_verify") is False
+
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
+        result = await flow.async_step_agents({CONF_DEFAULT_AGENT: "cora"})
+        assert result["options"]["ssl_verify"] is False
+
+    @pytest.mark.asyncio
+    async def test_user_step_ssl_verify_defaults_on(self):
+        flow = AgentBridgeConfigFlow()
+        flow.hass = MagicMock()
+
+        with patch(
+            "custom_components.agent_bridge.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.agent_bridge.config_flow.BridgeClient"
+        ) as MockClient:
+            instance = MockClient.return_value
+            instance.check_alive = AsyncMock(return_value=True)
+            instance.discover = AsyncMock(return_value=[{"id": "cora", "name": "Cora"}])
+
+            await flow.async_step_user(
+                {CONF_BRIDGE_URL: "http://bridge:18780", CONF_BRIDGE_TOKEN: "tok"}
+            )
+        assert MockClient.call_args.kwargs.get("ssl_verify") is True
+
+
 class TestOptionsFlow:
 
     @pytest.mark.asyncio
