@@ -102,7 +102,9 @@ def extract_response_text(data: Any, *, _depth: int = 0) -> str | None:
         # Fast path: OpenAI chat completion format
         if _depth == 0 and "choices" in data:
             choices = data["choices"]
-            if isinstance(choices, list) and choices:
+            # BG0013: choices[0] is bridge-supplied; fail soft to the generic
+            # traversal on any non-dict shape rather than raising.
+            if isinstance(choices, list) and choices and isinstance(choices[0], dict):
                 message = choices[0].get("message", {})
                 if isinstance(message, dict):
                     content = message.get("content")

@@ -103,6 +103,21 @@ class TestExtractResponseText:
         data = {"choices": []}
         assert extract_response_text(data) is None
 
+    def test_non_dict_first_choice_string(self):
+        # BG0013: a malformed bridge payload must fail soft, never AttributeError.
+        assert extract_response_text({"choices": ["oops"]}) is None
+
+    def test_non_dict_first_choice_none(self):
+        assert extract_response_text({"choices": [None]}) is None
+
+    def test_non_dict_first_choice_number(self):
+        assert extract_response_text({"choices": [42]}) is None
+
+    def test_non_dict_first_choice_falls_through_to_traversal(self):
+        # The generic traversal still finds text nested beyond a malformed choice.
+        data = {"choices": [["ignored"]], "message": "fallback"}
+        assert extract_response_text(data) == "fallback"
+
 
 class TestAgentLabel:
     """BG0005: shared label is ``name (crew)``, else the name, never the raw id."""

@@ -6,7 +6,7 @@ Related: help/bug.md, reference-bug.md
 -->
 # BG0013: `extract_response_text` raises `AttributeError` on a malformed `choices` payload — escapes every `except BridgeError` handler
 
-> **Status:** Open
+> **Status:** Fixed
 > **Severity:** Low
 > **Priority:** P3
 > **Reporter:** Code + security review (RV-requested, 2026-07-04)
@@ -52,22 +52,23 @@ Missing `isinstance(choices[0], dict)` guard in the `_depth == 0` fast path.
 
 ## Fix Description
 
-_(to fill on fix)_ Guard `choices[0]` with `isinstance(..., dict)`; on mismatch fall through to the priority-key traversal, which already handles arbitrary shapes.
+Added `isinstance(choices[0], dict)` to the fast-path guard; a non-dict first choice now falls through to the generic priority-key traversal (which finds any nested text or returns `None`), never raising.
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| — | — |
+| `helpers.py` | `isinstance(choices[0], dict)` added to the fast-path condition |
+| `tests/test_helpers.py` | 4 malformed-`choices` cases: str/None/number fail soft; traversal fallback still finds text |
 
 ---
 
 ## Verification
 
-- [ ] Fix verified in development (unit)
+- [x] Fix verified in development (unit) — TDD: 4 tests red first, green after; full suite 330 passed
 
-**Verified by:** —
-**Verification date:** —
+**Verified by:** unit tests (`tests/test_helpers.py::TestExtractResponseText::test_non_dict_first_choice_*`)
+**Verification date:** 2026-07-04
 **Verification depth:** functional
 
 ---
