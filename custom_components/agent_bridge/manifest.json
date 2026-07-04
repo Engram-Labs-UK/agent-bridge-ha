@@ -1,12 +1,16 @@
 {
     "domain": "agent_bridge",
     "name": "Agent Bridge",
-    "codeowners": ["@DarrenBenson"],
+    "codeowners": [
+        "@DarrenBenson"
+    ],
     "config_flow": true,
-    "dependencies": ["conversation"],
+    "dependencies": [
+        "conversation"
+    ],
     "documentation": "https://github.com/Engram-Labs-UK/agent-bridge-ha",
     "iot_class": "local_polling",
     "issue_tracker": "https://github.com/Engram-Labs-UK/agent-bridge-ha/issues",
     "requirements": [],
-    "version": "0.11.0"
+    "version": "0.11.1"
 }

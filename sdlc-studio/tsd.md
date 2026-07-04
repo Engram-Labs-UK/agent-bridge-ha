@@ -1,21 +1,20 @@
 # Test Strategy Document
 
 > **Project:** Agent Bridge HA
-> **Version:** 0.10.0
-> **Last Updated:** 2026-06-09
+> **Version:** 0.11.1
+> **Last Updated:** 2026-07-04
 > **Owner:** Darren Benson
-> **Last Review:** 2026-06-09 — RV0006 release-gate review (0.10.0)
+> **Last Review:** 2026-07-04 — CR-0011 full reconcile against the shipped suite
 
-> **Currency note (RV0006, 2026-06-09).** Stale vs the current suite; full reconcile
-> tracked in **CR-0011**. Deltas: the tool-execution test objective + `test_tool_executor.py`
-> + `test_init.py` are **removed** (CR-0006 culled the dead HA-side tool loop). New test
-> files not yet in the tree below: `test_diagnostics.py`, `test_openapi_contract.py`
-> (+ `tests/fixtures/bridge_openapi_contract.json`), plus extended `test_client` /
-> `test_coordinator` / `test_sensor` / `test_services` / `test_drift_surface` / `test_helpers`
-> / `test_config_flow`. Every feature shipped this release carries unit tests; CI (ruff +
-> pytest on HA 2026.2.3 / py3.13) is green.
-
-> ⚠️ **Review banner (2026-06-01):** Two strategy gaps surfaced by the CR-0002 audit. **(1)** Several "Done" stories' tests assert **drifted contracts** that no longer match reality — e.g. US0020 AC2/AC3 pin `choices[].delta.content` + the `data:[DONE]` sentinel, but the v4.36 bridge emits `event:message {text}` + `event:done`; mocked-bridge tests pass while the live path is inert. Mocks must be re-pinned to the v4.36 shapes (US0022/US0023). **(2)** There is **no CI matrix against a current HA core** and `ConversationInput` fields are read via `getattr` reflection — the integration drifted v3.1→v4.36 silently. US0029 adds a tested-HA-version pin + CI. The redesign re-platforms onto HA's `ConversationEntity`/`ChatLog`/LLM-API ([CR-0002](change-requests/cr0002.md) / [EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md)); the full TSD module rewrite is tracked by US0030.
+> **Currency note (CR-0011, 2026-07-04).** This TSD was fully reconciled against the
+> shipped test suite: the test tree and module table below match `tests/` exactly, the
+> tool-execution objective and its deleted test files are gone (CR-0006), and the
+> approach for the usage/doctor/memory/diagnostics/contract suites plus the CR-0014
+> (webhook hardening) and BG0012 (streaming confirm-marker strip) regression suites is
+> documented. Mocks are pinned to the v4.36+ bridge shapes (US0022/US0023); CI runs
+> ruff + pytest against the pinned HA **2026.2.3** / Python **3.13** and is green.
+> The 2026-06-01 audit gaps that drove the re-pin are [CR-0002](change-requests/cr0002.md)
+> / [EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md).
 
 ## Overview
 
@@ -23,17 +22,21 @@ Test strategy for Agent Bridge HA, a Home Assistant custom component. The strate
 
 ## Test Objectives
 
-- Verify the bridge client correctly constructs requests and parses responses for all consumed endpoints
-- Verify the conversation agent builds prompts with entity context, room awareness, and correct agent routing
+- Verify the bridge client correctly constructs requests and parses responses for all consumed endpoints (including URL-encoded path parameters — CR-0015)
+- Verify the consumed endpoint set against a captured slice of the bridge OpenAPI spec (contract testing — CR-0008)
+- Verify the conversation entity builds the layered prompt (instructions + source block + grounding hint + extra), the `caller_context` envelope, and correct agent routing via `_async_handle_message`/`ChatLog`
 - Verify entity exposure formats HA entities with areas, attributes, and respects the 250-entity cap
-- Verify the config flow validates bridge connectivity and authentication before accepting config
-- Verify the coordinator polls bridge health and updates entity state correctly
-- Verify sensors, binary sensors, and event entities reflect coordinator data accurately
-- Verify services (send_message, invoke_tool, broadcast) validate inputs and call correct bridge endpoints
-- Verify per-agent conversation agents route to the correct bridge agent
-- Verify graceful degradation when bridge is unreachable (cached data, user-friendly errors)
-- Verify tool execution from agent tool_calls: entity validation, HA service calls, loop cap, batch execution, partial failure handling, and result formatting (P0 critical path)
-- Verify session persistence creates, reuses, and survives HA restarts with correct session ID format
+- Verify the config flow validates bridge connectivity and authentication before accepting config (including the first-run SSL toggle — CR-0016), and the subentry/options flows
+- Verify the coordinator polls bridge health/discovery/usage/doctor and updates entity state correctly
+- Verify sensors (including the per-agent usage/cost sensors), binary sensors, and event entities reflect coordinator data accurately
+- Verify services (send_message, invoke_tool, broadcast, ask_with_image, announce, memory_record, memory_recall) validate inputs, fall back to the default agent, and call correct bridge endpoints (`ServiceValidationError` semantics — CR-0016)
+- Verify per-agent conversation entities route to the correct bridge agent and are gated on voice capability (US0028/CR-0003)
+- Verify graceful degradation when bridge is unreachable (cached data, usage/doctor carry-forward, user-friendly errors)
+- Verify the actuation boundary: no HA-side tool loop; the actuation audit event fires per reactive turn; the `[confirm:LEVEL]` marker is stripped and surfaced — on both the non-streaming and streaming paths (US0036/BG0012)
+- Verify session continuity: idle-windowed channel keys rotate after the idle gap and on clock jumps, and prune stale scopes (US0032)
+- Verify webhook hardening: persistent id reuse, stale-subscription cleanup, local-only/POST-only registration, and push validation (status whitelist, typed agentId/healthy — CR-0014)
+- Verify drift defences: agent-context baseline check and the opt-in fleet-doctor repair issue (US0029/CR-0009/CR-0012)
+- Verify the diagnostics download includes the doctor/usage/agent view with the token redacted (CR-0009)
 - Verify continuation detection triggers on question patterns and suppresses on exclusion phrases
 - Verify error responses from the bridge are translated to user-friendly conversation messages
 
@@ -78,23 +81,24 @@ Test strategy for Agent Bridge HA, a Home Assistant custom component. The strate
 | Framework | pytest + pytest-homeassistant-custom-component |
 | Execution | `python -m pytest tests/ -v` (pre-commit, CI) |
 
-**What to unit test:**
+**What to unit test (module ↔ test-file map):**
 
-| Module | Tests | Priority |
-|--------|-------|----------|
-| `client.py` | Request construction (URL, headers, body), response parsing (nested text extraction, tool_call extraction), error handling (typed exceptions), auth failure detection, timeout, SSL toggle, HA session reuse | P0 |
-| `exposure.py` | Entity formatting (name, state, area, attributes), 250-entity cap, truncation strategy, empty state, unavailable entities, template entities and groups pass through without type filtering | P0 |
-| `conversation.py` | System prompt building (three-layer: room + entities + extra), agent routing (default vs voice), voice source signalling, device/satellite/area metadata, language passthrough, session persistence, ConversationResult construction, error message mapping, continuation detection | P0 |
-| `coordinator.py` | Poll scheduling, data parsing, cache on failure (3 strikes), connected/disconnected transitions, agent diff detection | P0 |
-| `config_flow.py` | Step 1 validation (URL format, connectivity, auth), step 2 agent selection, options flow changes | P0 |
-| `sensor.py` | State from coordinator data, attribute mapping, unavailable when disconnected | P1 |
-| `binary_sensor.py` | Connected state, per-agent health state, device class | P1 |
-| `event.py` | Event firing on message received, event firing on tool invocation, event data shape | P1 |
-| `tool_executor.py` | HA service call from tool_call, entity validation against exposure list, batch execution, timeout handling, result formatting | P0 |
-| `helpers.py` | Recursive text extraction (priority keys, depth limit), text normalisation | P1 |
-| `services.py` | Input validation, agent_id lookup, bridge client call, response formatting | P1 |
-| `__init__.py` | Integration setup (async_setup_entry, async_unload_entry), platform forwarding | P1 |
-| `const.py` | Constant values (domain, platforms, defaults) | P2 |
+| Module | Covered by | Tests | Priority |
+|--------|-----------|-------|----------|
+| `client.py` | `test_client.py`, `test_streaming.py`, `test_openapi_contract.py` | Request construction (URL, headers incl. `x-bridge-mcp-caller`, body), path-parameter URL-encoding (CR-0015), response parsing, typed exceptions (auth/caller/timeout/connection), SSL toggle, HA session reuse, v4.36 SSE frame parsing + legacy fallback, usage/doctor/memory/agent-context/webhook methods, consumed-endpoint contract | P0 |
+| `exposure.py` | `test_exposure.py` | Entity formatting (name, state, area, attributes), 250-entity cap, truncation, empty state, unavailable entities, template entities and groups pass through without type filtering, recent-changes summary (US0034) | P0 |
+| `conversation.py` | `test_conversation.py`, `test_conversation_integration.py`, `test_streaming.py`, `test_agent_selection.py` | Layered system prompt, `caller_context` envelope, source-type classification, location/floor resolution, session-channel rotation (US0032), voice-capability gating, confirm-marker parse/strip (US0036) incl. the streaming delta adapter (BG0012), audit + message events, ConversationResult, error message mapping, continuation detection | P0 |
+| `coordinator.py` | `test_coordinator.py`, `test_drift_surface.py` | Poll scheduling, v4.x agent parsing (health block, taxonomy, crew), tri-state /v1/health enrichment, usage/doctor refresh + carry-forward (BG0007/BG0008), cache on failure (3 strikes), connected/disconnected transitions, agent diff events, webhook push validation (CR-0014) | P0 |
+| `config_flow.py` | `test_config_flow.py`, `test_agent_selection.py` | Step 1 validation (connectivity, auth, first-run SSL toggle — CR-0016), step 2 crew-labelled agent selection, options flow (Essentials + Advanced, session presets — CR-0013), subentry crew → agent → instructions flow + reconfigure (CR-0003) | P0 |
+| `sensor.py` | `test_sensor.py` | Bridge status/agent count state + attributes (tool_surface/read_only_safe), per-agent tokens + cost sensors (CR-0009): totals summing, None on missing/non-numeric data (BG0006), device attachment | P1 |
+| `binary_sensor.py` | `test_binary_sensor.py` | Connected state, device class | P1 |
+| `event.py` | `test_event.py` | Event entity firing on message received, event data shape | P1 |
+| `services.py` | `test_services.py`, `test_broadcast.py` | Input validation, agent_id lookup + default-agent fallback, `ServiceValidationError` semantics (CR-0016), bridge client call, response formatting, broadcast responses-object normalisation, ask_with_image attachment shape, announce availability gating, memory record/recall (CR-0010) | P1 |
+| `webhook.py` | `test_webhook.py` | Persistent webhook id reuse, local-only/POST-only registration, stale-handler replacement, stale-subscription cleanup, bridge registration fallback, event dispatch (health push, roster refresh, bridge:upgraded), invalid-payload 400 (BG0014) (CR-0014) | P0 |
+| `drift.py` | `test_drift_surface.py` | Agent-context drift check (version baseline, deprecations, issue raise/clear), fleet-doctor verdict → opt-in repair issue (CRITICAL only, toggle-off clears — CR-0012/BG0011) | P1 |
+| `diagnostics.py` | `test_diagnostics.py` | Redaction of token (and legacy caller_id), doctor/usage/agents payload shape (CR-0009) | P1 |
+| `ai_task.py` | `test_ai_task.py` | Code-fence stripping, structured JSON parse + error path, plain-text generate_data (US0039) | P1 |
+| `helpers.py` | `test_helpers.py` | Recursive text extraction (priority keys, depth limit, BG0013 fail-soft), caller-id resolution (BG0004), agent selectability/crew/label helpers (CR-0003/BG0005) | P1 |
 
 ### Integration Testing
 
@@ -108,51 +112,89 @@ Test strategy for Agent Bridge HA, a Home Assistant custom component. The strate
 
 | Scenario | What it covers |
 |----------|---------------|
-| Config flow happy path | Enter URL + token → bridge responds healthy → show agents → select defaults → entry created |
+| Config flow happy path | Enter URL + token (+ SSL toggle) → bridge responds healthy → crew-labelled agent picker → select default → entry created |
 | Config flow auth failure | Enter URL + token → bridge returns 401 → show auth error → do not create entry |
 | Config flow unreachable | Enter URL → connection refused → show connectivity error |
-| Options flow agent change | Change default agent → coordinator picks up change → conversation routes to new agent |
+| Config flow self-signed bridge | ssl_verify unticked first-run → client created with verification off → onboarding succeeds (CR-0016) |
+| Subentry flow | Crew picker → crew-scoped agent picker → instructions default → subentry created; reconfigure edits instructions (CR-0003) |
+| Options flow agent change | Change default agent → entry data updated → integration reloads → conversation routes to new agent |
+| Options flow session preset | Session-continuity dropdown value stored as int; legacy non-preset value falls back to default (CR-0013) |
 | Coordinator poll cycle | Setup entry → coordinator polls → sensors update → binary sensor connected |
 | Coordinator bridge down | Setup entry → bridge goes offline → 3 polls fail → sensors show offline → bridge returns → sensors recover |
-| Conversation round-trip | User sends message → conversation agent builds prompt → calls bridge → returns response → fires event |
-| Conversation with room | Voice request from device in "Kitchen" area → system prompt includes "The user is in the Kitchen" |
-| Conversation with satellite_id | Voice request with satellite_id different from device_id → area resolved from satellite's device entry |
-| Conversation voice metadata | Voice request → chat request includes `metadata.source: "voice"`, `metadata.area`, `metadata.device_id` |
-| Conversation text input | Text input (no device_id) → chat request has no metadata block (or `source: "text"`) |
-| Conversation extra_system_prompt | Pipeline provides extra_system_prompt → included as third layer in system prompt |
+| Coordinator observability refresh | Discovery cycle → usage fetched per agent + doctor fetched; one agent's failure keeps its last-known value; outage carries usage/doctor forward (CR-0009/BG0007) |
+| Webhook push valid status | `{"status": "degraded"}` push → bridge_status updated without a poll |
+| Webhook push invalid status | Non-string / unknown-vocabulary status push → ignored (CR-0014) |
+| Webhook push agent health | `{"agentId": "cora", "healthy": false}` → agent flag + healthy count updated; malformed types ignored; unknown agent triggers a refresh (CR-0014) |
+| Webhook persistent id | Second setup reuses the persisted webhook id; stale bridge subscription cleaned up first (CR-0014) |
+| Conversation round-trip | User sends message → entity builds layered prompt → calls bridge → reply in ChatLog → fires message + audit events |
+| Conversation with room | Voice request from device in "Kitchen" area → source block carries the area (and floor) |
+| Conversation with satellite_id | Voice request with satellite_id different from device_id → area resolved from the satellite's device entry |
+| Conversation caller context | Voice request → chat request includes `caller_context` (source_type voice, device, area, account unverified, local time) |
+| Conversation text input | Text input (no device_id) → `caller_context.source_type: "text"`; automation-parented turns classified "automation" |
+| Conversation extra_system_prompt | Pipeline provides extra_system_prompt → included as the final prompt layer |
 | Conversation language passthrough | Voice input with language "de" → IntentResponse.language set to "de" |
-| Session persistence create | First conversation with agent "cora" → session ID created and persisted to HA Store |
-| Session persistence reuse | Second conversation with same agent → same session ID reused from Store |
-| Session persistence restart | HA restarts → session IDs loaded from Store → previous sessions resumed |
-| Voice debug logging | debug_logging enabled → info log includes agent, session, area, device_id |
-| Voice debug logging off | debug_logging disabled → no routing info logged |
-| Tool call execution | Agent returns tool_call execute_service → integration calls hass.services.async_call → tool result sent back → agent gives final response |
-| Tool call batch | Agent returns execute_services with 3 entities → all 3 services called → results sent back |
-| Tool call validation | Agent targets unexposed entity → tool call rejected with error message to agent |
-| Tool call disabled | enable_tool_calls=false → tool_calls in response ignored, only text content used |
-| Tool call timeout | HA service call hangs → 10s timeout → error result sent to agent |
-| Tool call event | Tool executed → agent_bridge_tool_invoked event fires with entity_id, status, duration |
+| Session channel reuse | Two turns from the same device within the idle window → same `ha:{agent}:{scope}:{epoch}` channel (US0032) |
+| Session channel rotation | Turn after the idle gap (or a backwards clock jump) → epoch increments → new bridge session (US0032) |
+| Safety caution folded | Exposed entities include a lock → system prompt carries the deny/confirm caution (US0027) |
+| Confirm marker (non-streaming) | Reply prefixed `[confirm:high]` → marker stripped, severity on events, conversation kept open (US0036) |
+| Confirm marker (streaming) | Marker split across the first deltas → stripped before any content reaches TTS/ChatLog; severity surfaced (BG0012) |
+| Streaming fallback | Stream fails / yields nothing → non-streaming path runs without double-appending the assistant turn (US0033) |
+| Actuation audit event | Every reactive turn fires `agent_bridge_actuation_audit` with source, area, risky domains, confirmation state (US0027/AC3) |
 | Response nested extraction | Bridge returns deeply nested response structure → text extracted via priority key traversal |
-| Response tool_calls extraction | Bridge response includes tool_calls array → extracted and processed by conversation agent |
-| Auth failure handling | Bridge returns 401 → BridgeAuthError raised → config entry reload triggered |
+| Auth failure handling | Bridge returns 401 → BridgeAuthError raised; 403 with a caller-identity code → BridgeCallerError (BG0004) |
 | Client uses HA session | Client initialised → uses async_get_clientsession() not new aiohttp.ClientSession |
+| Client path encoding | Agent id with `/` or spaces → URL-encoded in usage/memory/webhook paths (CR-0015) |
 | Conversation bridge error | Bridge returns AGENT_TIMEOUT → conversation returns user-friendly error message |
 | Service send_message | Automation calls send_message → bridge receives correct request → response returned |
-| Service invoke_tool | Automation calls invoke_tool → bridge receives tool request → response returned |
-| Service invalid agent | Service called with unknown agent_id → validation error returned |
-| Per-agent entities enabled | Enable per_agent_entities → coordinator discovers 3 agents → 3 conversation agents + 3 binary sensors created |
-| Per-agent entity removal | Agent disappears from discovery → entity marked unavailable (not deleted) |
+| Service default-agent fallback | send_message / ask_with_image without agent_id → configured default agent used (CR-0016) |
+| Service invoke_tool | Automation calls invoke_tool → bridge receives the v4.36 `agent`/`tool` body → response returned |
+| Service invalid agent | Service called with unknown agent_id → `ServiceValidationError` (CR-0016) |
+| Service ask_with_image | Camera snapshot base64-encoded into the bridge attachment shape; capture failure returns a clean error (US0035) |
+| Service announce | Unavailable satellite skipped unless priority critical; assist_satellite.announce called otherwise (US0037) |
+| Service memory record/recall | memory_record posts content (+tags); memory_recall returns the items list; default-agent fallback; bridge errors in the response (CR-0010) |
+| Voice-capability gating | Orchestrators / chatbots / workerbots / model passthroughs get no conversation or ai_task entity (US0028/CR-0003) |
+| Usage sensors | Tokens sensor sums totalIn+totalOut; cost sensor None without pricing; null fields never raise (CR-0009/BG0006) |
+| Fleet-doctor repair | CRITICAL verdict + doctor_alerts on → repair issue raised; WARNING → none; toggle off clears (CR-0012/BG0011) |
+| Drift repair | agent-context version past `TESTED_BRIDGE_VERSION` or deprecations reported → repair issue raised; clears on recovery (US0029) |
+| Diagnostics download | Token (and legacy caller_id) redacted; doctor/usage/agents present (CR-0009) |
+| AI task structured data | Structure requested → JSON-only instruction appended → fenced JSON parsed; invalid JSON raises HomeAssistantError (US0039) |
+| OpenAPI contract | Every consumed (method, path) pair exists in the captured bridge spec fixture (CR-0008) |
 | Entity exposure cap | Expose 300 entities → context contains at most 250 |
 | Entity exposure attributes | Expose light at 75% brightness → context includes "brightness: 75" |
-| Continuation detection question | Agent response ends with "?" → ConversationResult has continue_conversation=True |
-| Continuation detection statement | Agent response ends with "." → ConversationResult has continue_conversation=False |
-| Broadcast service | Automation calls broadcast with message → bridge receives POST /v1/broadcast → aggregated response returned |
+| Continuation detection question | Agent response ends with "?" + continuation phrase → continue_conversation=True |
+| Continuation detection statement | Agent response ends with "." → continue_conversation=False |
+| Broadcast service | Automation calls broadcast → POST /v1/broadcast with `messages[]` + tags (default `['operator']`) → responses object normalised to a list |
 | Broadcast with tags | Automation calls broadcast with tags filter → bridge receives tags in request body |
-| Tool call loop cap | Agent returns tool_calls on every response for 11 rounds → after 10th iteration, user receives "Agent could not complete the request" error |
-| Tool call content + tool_calls | Agent returns both content ("I'll turn on the lights") and tool_calls → tools executed first, content preserved in message history, agent gives final grounded response |
-| Tool call batch partial failure | Agent returns execute_services with 3 entities, 1 times out → agent receives per-entity results: 2 success + 1 failure → agent reports partial success |
 | Template entity exposure | Expose template sensor (binary_sensor.house_occupied) and group (group.kitchen_lights) → both appear in entity context without filtering |
-| Unload entry | Remove integration → coordinator stopped → conversation agent unregistered → entities removed |
+| Unload entry | Remove integration → webhook unregistered (bridge + HA) → services removed with the last entry → entities removed |
+
+### Approach: usage / doctor / memory / diagnostics / contract suites (CR-0009/CR-0010)
+
+All of these mock the bridge — **never** a live bridge, per the TDD rule:
+
+- **Usage & cost** (`test_sensor.py`, `test_coordinator.py`): canned
+  `/v1/agents/{id}/usage` payloads (full, partial, null-fielded, missing) drive the
+  sensors; regression pins for BG0006 (None, not 0/raise) and BG0007/BG0008
+  (carry-forward + defensive copies).
+- **Fleet doctor** (`test_drift_surface.py`): canned `/v1/doctor` verdicts exercise
+  the repair-issue state machine — CRITICAL raises, WARNING stays advisory (BG0011),
+  the CR-0012 opt-in gate, and issue-registry churn suppression (BG0007).
+- **Memory** (`test_services.py`): mocked client asserts the record/recall bodies,
+  `?q=` pass-through, default-agent fallback, and error envelopes (CR-0010).
+- **Diagnostics** (`test_diagnostics.py`): a mocked coordinator verifies the payload
+  shape and redaction set.
+- **Contract** (`test_openapi_contract.py`): the consumed (method, path) list is
+  checked against `tests/fixtures/bridge_openapi_contract.json`, a captured slice of
+  the live `GET /v1/openapi.json`; refresh the fixture when the bridge baseline
+  moves, and a consumed endpoint disappearing fails in CI instead of at runtime.
+- **CR-0014 webhook regressions** (`test_webhook.py`, `test_coordinator.py`):
+  persistent-id reuse, stale-subscription cleanup, local-only/POST-only registration
+  flags, and push validation (status whitelist, typed agentId/healthy, non-object
+  payload → 400 per BG0014).
+- **BG0012 streaming regression** (`test_streaming.py`): the delta adapter is fed
+  confirm markers split across chunk boundaries, marker-only streams, and
+  non-marker text to prove nothing marker-shaped leaks to TTS/ChatLog and severity
+  is reported.
 
 ### End-to-End Testing
 
@@ -174,22 +216,26 @@ Test strategy for Agent Bridge HA, a Home Assistant custom component. The strate
 | Bridge health sensor | Dashboard: verify sensor shows ok/degraded/error | Not Started |
 | Agent count sensor | Dashboard: verify count matches bridge discovery | Not Started |
 | Connectivity sensor | Kill bridge → verify sensor shows disconnected → restart → recovers | Not Started |
-| Per-agent health | Enable per-agent entities → verify per-agent binary sensors | Not Started |
+| Usage & cost sensors | Dashboard: verify tokens + estimated-cost sensors track bridge usage | Not Started |
 | send_message service | Automation: send message to Cora → verify response | Not Started |
 | invoke_tool service | Automation: invoke tool on agent → verify response | Not Started |
+| Memory services | Automation: memory_record a fact → memory_recall returns it | Not Started |
 | Event: message received | Automation: trigger on message_received event → verify fires | Not Started |
-| Event: tool invoked | Automation: trigger on tool_invoked event → verify fires | Not Started |
+| Event: actuation audit | Automation: trigger on agent_bridge_actuation_audit → verify fires per reactive turn | Not Started |
 | Options flow | Change default agent → verify conversation routes to new agent | Not Started |
 | Graceful degradation | Bridge offline → voice command → user hears "Bridge is offline" | Not Started |
 | Multi-turn voice | Agent asks follow-up question → verify HA keeps listening | Not Started |
-| Session survives restart | Voice command → restart HA → voice command again → agent has prior context | Not Started |
-| Voice vs text routing | Voice from satellite uses voice_agent → text from dashboard uses default_agent | Not Started |
-| Voice response format | Voice command → agent response is concise, no markdown (source=voice effect) | Not Started |
+| Session continuity | Two voice commands within the idle window → agent has prior context; after the gap → fresh session | Not Started |
+| Voice response format | Voice command → agent response is concise, no markdown (audio-only modality effect) | Not Started |
 | Room-specific command | "Turn on the lights" from kitchen satellite → kitchen lights turn on, not all | Not Started |
-| Tool execution (light) | "Turn on the kitchen lights" → agent returns tool_call → light.kitchen turns on → agent confirms | Not Started |
-| Tool execution (climate) | "Set heating to 21" → agent returns tool_call → thermostat changes → agent confirms | Not Started |
-| Tool execution (multi) | "Turn off everything in the study" → agent batches tool_calls → multiple entities change | Not Started |
-| Unexposed entity blocked | Agent tries to control unexposed entity → blocked → agent reports it cannot | Not Started |
+| Actuation (light) | "Turn on the kitchen lights" → agent actuates via its /api/mcp mount → light.kitchen turns on → agent confirms from live state | Not Started |
+| Actuation (climate, confirm) | "Set heating to 21" → agent asks a [confirm:*] question → user confirms → thermostat changes | Not Started |
+| Actuation (multi) | "Turn off everything in the study" → agent actuates multiple entities via its mount | Not Started |
+| Unexposed entity blocked | Agent asked about an unexposed entity → not in the grounding hint → agent reports it cannot | Not Started |
+| Fleet-doctor repair | doctor_alerts on + broken fleet → HA repair issue appears; recovers → clears | Not Started |
+| Diagnostics download | Download diagnostics → token redacted, doctor/usage present | Not Started |
+| AI task | ai_task.generate_data with a structure → valid JSON data returned | Not Started |
+| Streaming voice | enable_streaming on → TTS starts before the full reply completes | Not Started |
 | Broadcast service | Automation: broadcast to all agents → verify aggregated responses | Not Started |
 
 ---
@@ -212,24 +258,23 @@ Test strategy for Agent Bridge HA, a Home Assistant custom component. The strate
 
 | Component | Test Double | Purpose |
 |-----------|------------|---------|
-| Bridge API | aiohttp mock (aioresponses) | Return canned health, discovery, chat responses |
+| Bridge API | Mocked `BridgeClient` (AsyncMock) / mocked aiohttp session | Return canned health, discovery, chat, usage, doctor, memory responses; assert request bodies |
+| SSE stream | Mocked `aiohttp` response `.content` line iterator | Feed v4.36 `event:message`/`event:done` frames (and legacy deltas) to the client parser |
 | HA entity registry | pytest-homeassistant-custom-component fixtures | Provide mock entities for exposure testing |
 | HA device registry | pytest-homeassistant-custom-component fixtures | Provide mock device-to-area mappings |
 | HA area registry | pytest-homeassistant-custom-component fixtures | Provide mock area names |
-| HA conversation API | Mock ConversationInput | Simulate voice and text input |
-| HA service registry | Mock hass.services.async_call | Verify tool executor service calls without real devices |
-| HA Store | Mock homeassistant.helpers.storage.Store | Verify session persist/load cycle without filesystem |
+| HA conversation API | Real `ChatLog` + mock `ConversationInput` | Exercise `_async_handle_message` with voice/text/automation turns |
+| HA service registry | Mock hass.services.async_call | Verify the announce service's assist_satellite call without real devices |
+| HA issue registry | Patched `issue_registry` helpers | Verify drift + fleet-doctor repair issues raise/clear (US0029/CR-0012) |
+| HA webhook component | Patched `webhook.async_register`/`async_unregister` | Verify persistent-id registration flags and lifecycle (CR-0014) |
 
 ### Test Fixtures
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| Bridge health responses | `tests/fixtures/health/` | Shallow and deep health JSON responses |
-| Bridge discovery responses | `tests/fixtures/discovery/` | Agent lists with various health states |
-| Bridge chat responses | `tests/fixtures/chat/` | Chat completion responses (success, tool_calls, content+tool_calls, error, timeout) |
-| Bridge error responses | `tests/fixtures/errors/` | All BridgeError code variants |
-| HA entity states | `tests/fixtures/entities/` | Entity state dicts for exposure testing |
-| Config entry data | `tests/conftest.py` | Standard config entry fixtures |
+| Bridge OpenAPI contract | `tests/fixtures/bridge_openapi_contract.json` | Captured slice of `GET /v1/openapi.json` for the consumed-endpoint contract test (CR-0008) |
+| Bridge responses (health, discovery, chat, usage, doctor, memory, errors) | Inline dicts in each test module | Canned payloads pinned to the v4.36+ shapes (US0022/US0023) |
+| Config entry data | `tests/conftest.py` + per-module helpers | Standard config entry / hass fixtures |
 
 ### Sensitive Data
 - Test config uses dummy tokens (`test-bridge-token-123`)
@@ -259,11 +304,11 @@ Test strategy for Agent Bridge HA, a Home Assistant custom component. The strate
 
 | Layer | Tool | Language |
 |-------|------|----------|
-| Unit | pytest | Python |
+| Unit | pytest + pytest-asyncio | Python |
 | Integration | pytest + pytest-homeassistant-custom-component | Python |
 | E2E | curl scripts + manual | Bash |
-| Coverage | pytest-cov (coverage.py) | N/A |
-| Mocking | unittest.mock + aioresponses | Python |
+| Coverage | pytest-cov (coverage.py, local — no CI gate) | N/A |
+| Mocking | unittest.mock (MagicMock/AsyncMock) | Python |
 
 ---
 
@@ -271,19 +316,20 @@ Test strategy for Agent Bridge HA, a Home Assistant custom component. The strate
 
 ### Pipeline Stages
 
-1. **Pre-commit:** ruff lint + format check, mypy type check
-2. **PR:** Unit + integration tests, coverage check
+1. **Pre-commit (local):** ruff lint + format check, mypy type check
+2. **PR / push (`.github/workflows/validate.yml`):** ruff lint + format check; full pytest suite against pinned HA `2026.2.3` on Python 3.13 (keep `HA_VERSION` in step with `const.TESTED_HA_VERSION` — Critical Rule 9); hassfest + HACS validation
 3. **Merge to main:** Full test suite
-4. **Release:** Tag → HACS picks up new version automatically
+4. **Release:** Pre-release gate (`reconcile --verify` + four-pillar review) → tag → HACS picks up new version
 
 ### Quality Gates
 
 | Gate | Criteria | Blocking |
 |------|----------|----------|
-| ruff lint | Zero errors | Yes |
-| mypy type check | Zero errors | Yes |
-| Unit coverage | >= 90% | Yes |
-| Integration tests | 100% pass | Yes |
+| ruff lint + format | Zero errors (CI) | Yes |
+| mypy type check | Zero errors (local) | Yes |
+| pytest suite | 100% pass on pinned HA/py (CI) | Yes |
+| hassfest / HACS validation | Pass (CI) | Yes |
+| Unit coverage | >= 90% target (measured locally with pytest-cov; not a CI gate) | No (advisory) |
 | Config flow tests | All paths tested | Yes |
 
 ### Performance Targets (from PRD NFRs)
@@ -326,43 +372,29 @@ Test strategy for Agent Bridge HA, a Home Assistant custom component. The strate
 
 ```text
 tests/
-  conftest.py                    # Shared fixtures: config entries, mock bridge, mock entities
+  __init__.py                      # Package marker
+  conftest.py                      # Shared fixtures: config entries, mock bridge, mock entities
   fixtures/
-    health/
-      shallow_ok.json
-      shallow_degraded.json
-      deep_all_healthy.json
-      deep_mixed.json
-    discovery/
-      three_agents.json
-      empty.json
-      agent_added.json
-      agent_removed.json
-    chat/
-      success.json
-      tool_calls.json               # Response with tool_calls array
-      content_and_tool_calls.json   # Response with both content and tool_calls
-      timeout_error.json
-      circuit_open_error.json
-    errors/
-      auth_required.json
-      rate_limited.json
-      agent_unreachable.json
-    entities/
-      lights_and_sensors.py        # Mock entity states
-      empty_home.py
-  test_client.py                   # Bridge client HTTP tests
-  test_config_flow.py              # Config flow + options flow
-  test_conversation.py             # Conversation agent + prompt building
-  test_coordinator.py              # Polling, caching, degradation
-  test_exposure.py                 # Entity exposure formatting
-  test_sensor.py                   # Sensor entity state
+    bridge_openapi_contract.json   # Captured bridge OpenAPI slice (CR-0008)
+  test_agent_selection.py          # Selectability filtering, crew picker, instructions (CR-0003)
+  test_ai_task.py                  # AI Task platform (US0039)
   test_binary_sensor.py            # Binary sensor state
+  test_broadcast.py                # Broadcast service + responses-object normalisation
+  test_client.py                   # Bridge client HTTP tests (incl. usage/doctor/memory, CR-0015 encoding)
+  test_config_flow.py              # Config flow + options flow (+ first-run SSL toggle, CR-0016)
+  test_conversation.py             # Prompt building, caller context, sessions, confirm markers
+  test_conversation_integration.py # ConversationEntity via _async_handle_message + real ChatLog
+  test_coordinator.py              # Polling, caching, degradation, webhook pushes (CR-0014)
+  test_diagnostics.py              # Diagnostics platform + redaction (CR-0009)
+  test_drift_surface.py            # v4.x discovery/health surface, drift + doctor repairs (US0028/US0029)
   test_event.py                    # Event entity firing
-  test_services.py                 # Service handlers
-  test_tool_executor.py            # HA service execution from tool_calls
-  test_helpers.py                  # Text extraction, normalisation
-  test_init.py                     # Integration setup/unload
+  test_exposure.py                 # Entity exposure formatting + recent changes
+  test_helpers.py                  # Text extraction, caller id, crew/label helpers
+  test_openapi_contract.py         # Consumed-endpoint contract vs the captured spec (CR-0008)
+  test_sensor.py                   # Bridge + per-agent usage/cost sensor state (CR-0009)
+  test_services.py                 # Service handlers (incl. memory, ask_with_image, announce)
+  test_streaming.py                # SSE parsing, delta adapter, confirm-marker strip (BG0012)
+  test_webhook.py                  # Webhook lifecycle + hardening (CR-0014)
 ```
 
 ---
@@ -381,3 +413,4 @@ tests/
 | 2026-04-05 | Claude | TSD review: added tool execution/session/continuation test objectives; added 4 ADR-005 integration scenarios (loop cap, content+tool_calls, batch partial failure, template exposure); added tool_calls fixtures; added HA service registry and HA Store test doubles; added broadcast E2E scenario |
 | 2026-04-05 | Claude | RV0005: test suite implemented -- 188 tests, 90% coverage. 11 test files created. CI/CD pipeline created (.github/workflows/validate.yml) |
 | 2026-06-09 | Claude | RV0006 release-gate review: currency note (top) — tool-execution test objective + `test_tool_executor.py`/`test_init.py` removed (CR-0006); new `test_diagnostics`/`test_openapi_contract` + extended suites for CR-0008..0010 + BG0005. Full test-tree/module-table reconcile tracked in CR-0011. |
+| 2026-07-04 | Claude | CR-0011 full reconcile: test tree + module table now match `tests/` exactly (19 test modules + the OpenAPI contract fixture); tool-execution objective and scenarios removed; objectives + integration scenarios rewritten to the shipped design (Option A actuation, caller_context, idle-window sessions, confirm markers); documented the usage/doctor/memory/diagnostics/contract test approach and the CR-0014 (webhook hardening) + BG0012 (streaming confirm strip) regression suites; test doubles/fixtures/CI gates re-baselined to the real tooling (unittest.mock, pinned HA 2026.2.3 / py3.13). |

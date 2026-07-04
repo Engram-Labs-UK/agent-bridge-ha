@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from homeassistant.exceptions import ServiceValidationError
+
 from custom_components.agent_bridge.const import CONF_DEFAULT_AGENT, DOMAIN
 from custom_components.agent_bridge.services import (
     _get_entry_data,
@@ -39,6 +41,7 @@ def mock_hass():
     )
     client.invoke_tool = AsyncMock(return_value={"result": "ok"})
 
+    hass.config_entries.async_entries.return_value = []
     hass.data = {
         DOMAIN: {
             "entry_1": {
@@ -59,13 +62,13 @@ class TestGetEntryData:
     def test_raises_when_no_entries(self):
         hass = MagicMock()
         hass.data = {DOMAIN: {}}
-        with pytest.raises(ValueError, match="not configured"):
+        with pytest.raises(ServiceValidationError, match="not configured"):
             _get_entry_data(hass)
 
     def test_raises_when_no_domain(self):
         hass = MagicMock()
         hass.data = {}
-        with pytest.raises(ValueError, match="not configured"):
+        with pytest.raises(ServiceValidationError, match="not configured"):
             _get_entry_data(hass)
 
 
@@ -92,6 +95,26 @@ class TestAskWithImage:
         attachments = client.chat.call_args.kwargs["attachments"]
         assert attachments[0]["mime_type"] == "image/png"
         assert attachments[0]["base64"]  # non-empty base64
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_configured_agent(self, mock_hass):
+        """CR-0016 Item 1: same default-agent fallback as send_message."""
+        mock_hass.config_entries.async_entries.return_value = [
+            MagicMock(data={CONF_DEFAULT_AGENT: "cora"})
+        ]
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"message": "look", "camera_entity_id": "camera.front_door"}
+
+        image = MagicMock(content=b"x", content_type="image/jpeg")
+        with patch(
+            "homeassistant.components.camera.async_get_image",
+            AsyncMock(return_value=image),
+        ):
+            await async_handle_ask_with_image(call)
+
+        client = _get_entry_data(mock_hass)["client"]
+        assert client.chat.call_args.kwargs["agent"] == "cora"
 
     @pytest.mark.asyncio
     async def test_camera_error_returns_error(self, mock_hass):
@@ -170,13 +193,13 @@ class TestValidateAgentId:
 
     def test_unknown_agent(self, mock_hass):
         data = _get_entry_data(mock_hass)
-        with pytest.raises(ValueError, match="Unknown agent"):
+        with pytest.raises(ServiceValidationError, match="Unknown agent"):
             _validate_agent_id(data["coordinator"], "nonexistent")
 
     def test_no_data(self):
         coordinator = MagicMock()
         coordinator.data = None
-        with pytest.raises(ValueError, match="not available"):
+        with pytest.raises(ServiceValidationError, match="not available"):
             _validate_agent_id(coordinator, "cora")
 
 
@@ -199,6 +222,32 @@ class TestSendMessage:
 
         result = await async_handle_send_message(call)
         assert "response" in result
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_configured_agent(self, mock_hass):
+        """CR-0016 Item 1: agent_id omitted -> the configured default agent
+        (the behaviour services.yaml has documented all along)."""
+        mock_hass.config_entries.async_entries.return_value = [
+            MagicMock(data={CONF_DEFAULT_AGENT: "cora"})
+        ]
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"message": "Hello"}
+
+        await async_handle_send_message(call)
+        client = _get_entry_data(mock_hass)["client"]
+        assert client.chat.call_args.kwargs["agent"] == "cora"
+
+    @pytest.mark.asyncio
+    async def test_no_default_falls_back_to_bridge_routing(self, mock_hass):
+        """CR-0016 Item 1: no default configured -> agent=None (bridge routes)."""
+        call = MagicMock()
+        call.hass = mock_hass
+        call.data = {"message": "Hello"}
+
+        await async_handle_send_message(call)
+        client = _get_entry_data(mock_hass)["client"]
+        assert client.chat.call_args.kwargs["agent"] is None
 
     @pytest.mark.asyncio
     async def test_bridge_error(self, mock_hass):
@@ -238,7 +287,7 @@ class TestInvokeTool:
             "tool_name": "web_search",
         }
 
-        with pytest.raises(ValueError, match="Unknown agent"):
+        with pytest.raises(ServiceValidationError, match="Unknown agent"):
             await async_handle_invoke_tool(call)
 
 
@@ -305,5 +354,5 @@ class TestMemoryServices:
         call = MagicMock()
         call.hass = mock_hass
         call.data = {"content": "x", "agent_id": "ghost"}
-        with pytest.raises(ValueError, match="Unknown agent"):
+        with pytest.raises(ServiceValidationError, match="Unknown agent"):
             await async_handle_memory_record(call)

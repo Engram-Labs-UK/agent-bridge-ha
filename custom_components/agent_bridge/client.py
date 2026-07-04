@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -229,7 +230,7 @@ class BridgeClient:
         Typed surface (bridge v4.x): ``totals`` (``totalIn``/``totalOut``/``turnCount``),
         ``estimatedTotalCostGBP``, ``perModel``/``perChannel`` arrays, and a ``range``.
         """
-        return await self._request("GET", f"/v1/agents/{agent_id}/usage")
+        return await self._request("GET", f"/v1/agents/{quote(agent_id, safe='')}/usage")
 
     async def doctor(self) -> dict[str, Any]:
         """Get ``/v1/doctor`` -- one-call fleet diagnosis (CR-0009).
@@ -255,7 +256,9 @@ class BridgeClient:
         body: dict[str, Any] = {"content": content}
         if tags:
             body["tags"] = tags
-        return await self._request("POST", f"/v1/agents/{agent_id}/memory", json=body)
+        return await self._request(
+            "POST", f"/v1/agents/{quote(agent_id, safe='')}/memory", json=body
+        )
 
     async def memory_recall(
         self,
@@ -268,10 +271,8 @@ class BridgeClient:
         as ``?q=`` best-effort (the param is not in the OpenAPI; an unsupported
         bridge simply returns all items).
         """
-        path = f"/v1/agents/{agent_id}/memory"
+        path = f"/v1/agents/{quote(agent_id, safe='')}/memory"
         if query:
-            from urllib.parse import quote
-
             path = f"{path}?q={quote(query)}"
         return await self._request("GET", path)
 
@@ -477,4 +478,4 @@ class BridgeClient:
 
     async def unregister_webhook(self, subscription_id: str) -> dict[str, Any]:
         """Unregister a webhook subscription from the bridge."""
-        return await self._request("DELETE", f"/v1/webhooks/{subscription_id}")
+        return await self._request("DELETE", f"/v1/webhooks/{quote(subscription_id, safe='')}")

@@ -6,9 +6,16 @@ import logging
 
 from aiohttp.web import Request, Response
 from homeassistant.components import webhook
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_WEBHOOK_ID
 from homeassistant.core import HomeAssistant
 
-from .const import BRIDGE_WEBHOOK_EVENTS, DOMAIN, EVENT_BRIDGE_UPGRADED
+from .const import (
+    BRIDGE_WEBHOOK_EVENTS,
+    CONF_WEBHOOK_SUBSCRIPTION_ID,
+    DOMAIN,
+    EVENT_BRIDGE_UPGRADED,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,21 +25,74 @@ _REFRESH_EVENTS = frozenset({"agent:registered", "agent:unregistered", "agent:up
 
 async def async_register_webhook(
     hass: HomeAssistant,
-    entry_id: str,
+    entry: ConfigEntry,
 ) -> str | None:
-    """Register a webhook with HA and return the webhook ID."""
-    webhook_id = webhook.async_generate_id()
+    """Register the persistent webhook with HA and return the webhook ID.
 
-    webhook.async_register(
-        hass,
-        DOMAIN,
-        "Agent Bridge",
-        webhook_id,
-        _handle_webhook,
-    )
+    CR-0014: the id is generated once and persisted in ``entry.data`` so
+    restarts reuse it (no bridge-subscription churn); registration is
+    local-only and POST-only (the bridge posts from the LAN). HA webhooks are
+    unauthenticated by design -- the id is the credential, so it is logged at
+    DEBUG only.
+    """
+    webhook_id = entry.data.get(CONF_WEBHOOK_ID)
+    if not webhook_id:
+        webhook_id = webhook.async_generate_id()
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_WEBHOOK_ID: webhook_id}
+        )
 
-    _LOGGER.info("Registered HA webhook: %s", webhook_id)
+    try:
+        webhook.async_register(
+            hass,
+            DOMAIN,
+            "Agent Bridge",
+            webhook_id,
+            _handle_webhook,
+            local_only=True,
+            allowed_methods=["POST"],
+        )
+    except ValueError:
+        # The persistent id is already registered (a mid-setup failure earlier in
+        # this run never unloaded). Replace the stale handler rather than fail.
+        webhook.async_unregister(hass, webhook_id)
+        webhook.async_register(
+            hass,
+            DOMAIN,
+            "Agent Bridge",
+            webhook_id,
+            _handle_webhook,
+            local_only=True,
+            allowed_methods=["POST"],
+        )
+
+    _LOGGER.debug("Registered HA webhook: %s", webhook_id)
     return webhook_id
+
+
+async def async_cleanup_stale_subscription(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Best-effort unregister of a bridge subscription left by a previous run.
+
+    CR-0014: with a persistent webhook id, a subscription leaked by an unclean
+    shutdown would keep delivering (duplicate events); drop it before
+    registering the fresh one so at most one live subscription exists.
+    """
+    stale = entry.data.get(CONF_WEBHOOK_SUBSCRIPTION_ID)
+    if not stale:
+        return
+    client = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("client")
+    if client is None:
+        return
+    try:
+        await client.unregister_webhook(stale)
+        _LOGGER.debug("Unregistered stale bridge webhook subscription: %s", stale)
+    except Exception as err:
+        _LOGGER.debug(
+            "Stale bridge webhook subscription cleanup failed (ignored): %s (%s)", stale, err
+        )
 
 
 async def async_register_with_bridge(
@@ -91,7 +151,7 @@ async def async_unregister_webhook(
     # Unregister from HA
     if webhook_id:
         webhook.async_unregister(hass, webhook_id)
-        _LOGGER.info("Unregistered HA webhook: %s", webhook_id)
+        _LOGGER.debug("Unregistered HA webhook: %s", webhook_id)
 
 
 async def _handle_webhook(
@@ -104,6 +164,10 @@ async def _handle_webhook(
         payload = await request.json()
     except Exception:
         _LOGGER.warning("Invalid webhook payload received")
+        return Response(status=400)
+    # BG0014: valid JSON that is not an object gets the same clean 400.
+    if not isinstance(payload, dict):
+        _LOGGER.warning("Invalid webhook payload received (not a JSON object)")
         return Response(status=400)
 
     event_type = payload.get("event")

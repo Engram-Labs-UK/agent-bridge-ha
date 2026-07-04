@@ -15,11 +15,21 @@ from custom_components.agent_bridge.webhook import (
 from custom_components.agent_bridge.const import DOMAIN
 
 
+def _entry(data=None):
+    entry = MagicMock()
+    entry.entry_id = "entry_1"
+    entry.data = data or {}
+    entry.options = {}
+    return entry
+
+
 class TestAsyncRegisterWebhook:
 
     @pytest.mark.asyncio
-    async def test_registers_with_ha(self):
+    async def test_registers_with_ha_and_persists_id(self):
+        """CR-0014: a fresh id is generated once and persisted in entry.data."""
         hass = MagicMock()
+        entry = _entry()
 
         with patch(
             "custom_components.agent_bridge.webhook.webhook.async_generate_id",
@@ -27,10 +37,131 @@ class TestAsyncRegisterWebhook:
         ), patch(
             "custom_components.agent_bridge.webhook.webhook.async_register",
         ) as mock_register:
-            result = await async_register_webhook(hass, "entry_1")
+            result = await async_register_webhook(hass, entry)
 
         assert result == "wh_test_123"
         mock_register.assert_called_once()
+        hass.config_entries.async_update_entry.assert_called_once()
+        _, kwargs = hass.config_entries.async_update_entry.call_args
+        assert kwargs["data"]["webhook_id"] == "wh_test_123"
+
+    @pytest.mark.asyncio
+    async def test_registers_local_only_post_only(self):
+        """CR-0014 Item 1: local_only=True, POST only."""
+        hass = MagicMock()
+        entry = _entry()
+
+        with patch(
+            "custom_components.agent_bridge.webhook.webhook.async_generate_id",
+            return_value="wh_test_123",
+        ), patch(
+            "custom_components.agent_bridge.webhook.webhook.async_register",
+        ) as mock_register:
+            await async_register_webhook(hass, entry)
+
+        kwargs = mock_register.call_args.kwargs
+        assert kwargs.get("local_only") is True
+        assert list(kwargs.get("allowed_methods") or []) == ["POST"]
+
+    @pytest.mark.asyncio
+    async def test_reuses_persisted_webhook_id(self):
+        """CR-0014 Item 3: a persisted id survives restarts -- no regenerate, no rewrite."""
+        hass = MagicMock()
+        entry = _entry(data={"webhook_id": "wh_persisted"})
+
+        with patch(
+            "custom_components.agent_bridge.webhook.webhook.async_generate_id",
+        ) as mock_gen, patch(
+            "custom_components.agent_bridge.webhook.webhook.async_register",
+        ) as mock_register:
+            result = await async_register_webhook(hass, entry)
+
+        assert result == "wh_persisted"
+        mock_gen.assert_not_called()
+        hass.config_entries.async_update_entry.assert_not_called()
+        assert mock_register.call_args.args[3] == "wh_persisted"
+
+    @pytest.mark.asyncio
+    async def test_already_registered_id_is_replaced(self):
+        """CR-0014 risk mitigation: a persisted id still registered from a
+        failed same-run setup is unregistered and re-registered, not fatal."""
+        hass = MagicMock()
+        entry = _entry(data={"webhook_id": "wh_persisted"})
+
+        with patch(
+            "custom_components.agent_bridge.webhook.webhook.async_register",
+            side_effect=[ValueError("Handler is already defined!"), None],
+        ) as mock_register, patch(
+            "custom_components.agent_bridge.webhook.webhook.async_unregister",
+        ) as mock_unregister:
+            result = await async_register_webhook(hass, entry)
+
+        assert result == "wh_persisted"
+        mock_unregister.assert_called_once_with(hass, "wh_persisted")
+        assert mock_register.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_webhook_id_not_logged_at_info(self, caplog):
+        """CR-0014 Item 4: the id is the credential -- never at INFO."""
+        import logging
+
+        hass = MagicMock()
+        entry = _entry()
+
+        with patch(
+            "custom_components.agent_bridge.webhook.webhook.async_generate_id",
+            return_value="wh_secret_456",
+        ), patch(
+            "custom_components.agent_bridge.webhook.webhook.async_register",
+        ), caplog.at_level(logging.INFO):
+            await async_register_webhook(hass, entry)
+
+        info_and_up = [r.getMessage() for r in caplog.records if r.levelno >= logging.INFO]
+        assert not any("wh_secret_456" in m for m in info_and_up)
+
+
+class TestCleanupStaleSubscription:
+    """CR-0014 Item 3: a subscription persisted by a previous (crashed) run is
+    unregistered on the next setup, so only one live subscription exists."""
+
+    @pytest.mark.asyncio
+    async def test_stale_subscription_unregistered(self):
+        from custom_components.agent_bridge.webhook import async_cleanup_stale_subscription
+
+        hass = MagicMock()
+        client = MagicMock()
+        client.unregister_webhook = AsyncMock()
+        hass.data = {DOMAIN: {"entry_1": {"client": client}}}
+        entry = _entry(data={"webhook_subscription_id": "sub_stale"})
+
+        await async_cleanup_stale_subscription(hass, entry)
+        client.unregister_webhook.assert_called_once_with("sub_stale")
+
+    @pytest.mark.asyncio
+    async def test_no_stale_subscription_noop(self):
+        from custom_components.agent_bridge.webhook import async_cleanup_stale_subscription
+
+        hass = MagicMock()
+        client = MagicMock()
+        client.unregister_webhook = AsyncMock()
+        hass.data = {DOMAIN: {"entry_1": {"client": client}}}
+
+        await async_cleanup_stale_subscription(hass, _entry())
+        client.unregister_webhook.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_bridge_error_swallowed(self):
+        from custom_components.agent_bridge.webhook import async_cleanup_stale_subscription
+
+        hass = MagicMock()
+        client = MagicMock()
+        client.unregister_webhook = AsyncMock(side_effect=RuntimeError("gone"))
+        hass.data = {DOMAIN: {"entry_1": {"client": client}}}
+
+        # Best-effort: never raises.
+        await async_cleanup_stale_subscription(
+            hass, _entry(data={"webhook_subscription_id": "sub_stale"})
+        )
 
 
 class TestAsyncRegisterWithBridge:
@@ -201,6 +332,20 @@ class TestHandleWebhook:
         assert response.status == 400
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("payload", [[1, 2, 3], "x", 42, None, True])
+    async def test_non_object_json_payload_is_400(self, payload):
+        """BG0014: valid JSON that is not an object gets the same clean 400 as
+        unparseable JSON -- never an unhandled AttributeError."""
+        hass = MagicMock()
+        hass.data = {DOMAIN: {}}
+
+        request = MagicMock()
+        request.json = AsyncMock(return_value=payload)
+
+        response = await _handle_webhook(hass, "wh_123", request)
+        assert response.status == 400
+
+    @pytest.mark.asyncio
     async def test_coordinator_push(self):
         """Test that async_push_webhook_data updates coordinator state."""
         from custom_components.agent_bridge.coordinator import (
@@ -344,3 +489,55 @@ class TestPerAgentHealthPush:
 
         coord.async_set_updated_data.assert_not_called()
         coord.async_request_refresh.assert_called_once()
+
+
+class TestPushValueValidation:
+    """CR-0014 Item 2: pushed values are validated before entering coordinator data."""
+
+    def _coord(self):
+        from custom_components.agent_bridge.coordinator import (
+            AgentBridgeCoordinator,
+            CoordinatorData,
+        )
+
+        hass = MagicMock()
+        coord = AgentBridgeCoordinator(hass, MagicMock())
+        coord.data = CoordinatorData(
+            connected=True, bridge_status="ok", bridge_version="4.141.0",
+            bridge_uptime=1, agent_count_healthy=1, agent_count_total=1,
+            agents=[{"id": "cora", "name": "Cora", "description": "", "healthy": True,
+                     "adapter": "", "capabilities": {}, "tags": []}],
+            last_poll="2026-07-04T00:00:00Z",
+        )
+        coord.async_set_updated_data = MagicMock()
+        coord.async_request_refresh = AsyncMock()
+        return coord
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", ["evil<script>", "", 42, None, {"x": 1}])
+    async def test_unknown_status_value_ignored(self, status):
+        coord = self._coord()
+        await coord.async_push_webhook_data({"status": status})
+        coord.async_set_updated_data.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", ["degraded", "ok", "error", "warning", "READY"])
+    async def test_known_status_value_applied(self, status):
+        coord = self._coord()
+        await coord.async_push_webhook_data({"status": status})
+        coord.async_set_updated_data.assert_called_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("healthy", ["yes", 1, None, [True]])
+    async def test_non_bool_healthy_ignored(self, healthy):
+        coord = self._coord()
+        await coord.async_push_webhook_data({"agentId": "cora", "healthy": healthy})
+        coord.async_set_updated_data.assert_not_called()
+        coord.async_request_refresh.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_string_agent_id_ignored(self):
+        coord = self._coord()
+        await coord.async_push_webhook_data({"agentId": 7, "healthy": False})
+        coord.async_set_updated_data.assert_not_called()
+        coord.async_request_refresh.assert_not_called()

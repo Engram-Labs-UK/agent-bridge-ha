@@ -8,7 +8,6 @@ import pytest
 
 from custom_components.agent_bridge.binary_sensor import (
     BridgeConnectedSensor,
-    PerAgentHealthSensor,
 )
 
 
@@ -53,49 +52,3 @@ class TestBridgeConnectedSensor:
     def test_unique_id(self, mock_coordinator, mock_entry):
         sensor = BridgeConnectedSensor(mock_coordinator, mock_entry)
         assert sensor._attr_unique_id == "test_entry_connected"
-
-
-class TestPerAgentHealthSensor:
-
-    def test_healthy_agent(self, mock_coordinator, mock_entry):
-        sensor = PerAgentHealthSensor(
-            mock_coordinator, mock_entry, "cora", "Cora"
-        )
-        assert sensor.is_on is True
-
-    def test_unhealthy_agent(self, mock_coordinator, mock_entry):
-        sensor = PerAgentHealthSensor(
-            mock_coordinator, mock_entry, "claude", "Claude"
-        )
-        assert sensor.is_on is False
-
-    def test_missing_agent(self, mock_coordinator, mock_entry):
-        sensor = PerAgentHealthSensor(
-            mock_coordinator, mock_entry, "unknown", "Unknown"
-        )
-        assert sensor.is_on is None
-
-    def test_extra_attributes(self, mock_coordinator, mock_entry):
-        sensor = PerAgentHealthSensor(
-            mock_coordinator, mock_entry, "cora", "Cora"
-        )
-        attrs = sensor.extra_state_attributes
-        assert attrs["adapter"] == "http-openai"
-
-    def test_available_when_agent_exists(self, mock_coordinator, mock_entry):
-        sensor = PerAgentHealthSensor(
-            mock_coordinator, mock_entry, "cora", "Cora"
-        )
-        assert sensor.available is True
-
-    def test_unavailable_when_agent_removed(self, mock_coordinator, mock_entry):
-        sensor = PerAgentHealthSensor(
-            mock_coordinator, mock_entry, "removed_agent", "Removed"
-        )
-        assert sensor.available is False
-
-    def test_name(self, mock_coordinator, mock_entry):
-        sensor = PerAgentHealthSensor(
-            mock_coordinator, mock_entry, "cora", "Cora"
-        )
-        assert sensor.name == "cora Healthy"

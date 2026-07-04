@@ -1,112 +1,116 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "title": "Agent Bridge",
-                "description": "Connect to your Agent Bridge instance.",
-                "data": {
-                    "bridge_url": "Bridge URL",
-                    "bridge_token": "API Token"
-                }
-            },
-            "agents": {
-                "title": "Select Agent",
-                "description": "Choose the agent for voice and chat.",
-                "data": {
-                    "default_agent": "Agent"
-                }
-            }
+  "config": {
+    "step": {
+      "user": {
+        "title": "Agent Bridge",
+        "description": "Connect to your Agent Bridge instance.",
+        "data": {
+          "bridge_url": "Bridge URL",
+          "bridge_token": "API Token",
+          "ssl_verify": "Verify SSL certificate"
         },
-        "error": {
-            "cannot_connect": "Cannot connect to bridge",
-            "invalid_auth": "Invalid API token",
-            "no_agents": "No agents found on bridge",
-            "unknown": "An unexpected error occurred"
-        },
-        "abort": {
-            "already_configured": "Agent Bridge is already configured"
+        "data_description": {
+          "ssl_verify": "Disable only for a bridge behind a self-signed HTTPS certificate."
         }
+      },
+      "agents": {
+        "title": "Select Agent",
+        "description": "Choose the agent for voice and chat.",
+        "data": {
+          "default_agent": "Agent"
+        }
+      }
     },
-    "options": {
-        "step": {
-            "init": {
-                "title": "Agent Bridge Options",
-                "data": {
-                    "default_agent": "Default / voice agent",
-                    "ssl_verify": "Verify SSL certificates"
-                },
-                "data_description": {
-                    "default_agent": "The agent used for voice and chat by default. Add more agents as separate conversation entities with \"Add agent\".",
-                    "ssl_verify": "Turn off only for a self-signed or LAN bridge; leave on for a valid certificate."
-                },
-                "sections": {
-                    "advanced": {
-                        "name": "Advanced",
-                        "description": "Tuning with sensible defaults -- most installs can leave these alone.",
-                        "data": {
-                            "context_max_chars": "Max entity context (characters)",
-                            "thinking_timeout": "Agent response timeout (seconds)",
-                            "session_idle_window": "Session continuity",
-                            "enable_streaming": "Stream replies to voice (experimental)",
-                            "doctor_alerts": "Fleet health alerts"
-                        },
-                        "data_description": {
-                            "context_max_chars": "How much Home Assistant entity state to put in the prompt (1000-200000). Higher means the agent sees more, at more tokens and latency.",
-                            "thinking_timeout": "How long Assist waits for the agent before giving up (10-3600).",
-                            "session_idle_window": "How long related turns reuse the same bridge session before the conversation context rotates.",
-                            "enable_streaming": "Lower TTS latency by streaming the reply as it is generated. Only helps with a streaming-capable TTS engine; otherwise falls back to non-streaming.",
-                            "doctor_alerts": "Raise a repair issue when the bridge reports a CRITICAL fleet problem. Off by default."
-                        }
-                    }
-                }
-            }
-        }
+    "error": {
+      "cannot_connect": "Cannot connect to bridge",
+      "invalid_auth": "Invalid API token",
+      "no_agents": "No agents found on bridge",
+      "unknown": "An unexpected error occurred"
     },
-    "issues": {
-        "bridge_drift": {
-            "title": "Agent Bridge has drifted from its tested baseline",
-            "description": "The bridge reports changes past the integration's tested baseline ({tested_version}): {reasons}. Review the bridge changelog and update the integration if needed. Live bridge version: {live_version}."
-        },
-        "fleet_doctor": {
-            "title": "Agent Bridge fleet health: {verdict}",
-            "description": "The bridge doctor reports a {verdict} verdict: {findings}. Review the bridge for detail."
-        }
-    },
-    "config_subentries": {
-        "conversation": {
-            "initiate_flow": {
-                "user": "Add agent",
-                "reconfigure": "Edit instructions"
-            },
-            "step": {
-                "user": {
-                    "title": "Select a crew",
-                    "description": "Pick a crew to narrow the agent list, or choose All crews.",
-                    "data": {
-                        "crew": "Crew"
-                    }
-                },
-                "agent": {
-                    "title": "Select an agent",
-                    "description": "Only conversational agents are listed (no models, chatbots, workerbots or orchestrators).",
-                    "data": {
-                        "agent_id": "Agent",
-                        "prompt": "Instructions"
-                    },
-                    "data_description": {
-                        "prompt": "Instructions sent to the agent each turn -- tells it the request is from Home Assistant and to actuate via its Home Assistant tools."
-                    }
-                },
-                "reconfigure": {
-                    "title": "Edit instructions",
-                    "data": {
-                        "prompt": "Instructions"
-                    }
-                }
-            },
-            "abort": {
-                "no_agents": "No selectable agents were found on the bridge."
-            }
-        }
+    "abort": {
+      "already_configured": "Agent Bridge is already configured"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Agent Bridge Options",
+        "data": {
+          "default_agent": "Default / voice agent",
+          "ssl_verify": "Verify SSL certificates"
+        },
+        "data_description": {
+          "default_agent": "The agent used for voice and chat by default. Add more agents as separate conversation entities with \"Add agent\".",
+          "ssl_verify": "Turn off only for a self-signed or LAN bridge; leave on for a valid certificate."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "Tuning with sensible defaults -- most installs can leave these alone.",
+            "data": {
+              "context_max_chars": "Max entity context (characters)",
+              "thinking_timeout": "Agent response timeout (seconds)",
+              "session_idle_window": "Session continuity",
+              "enable_streaming": "Stream replies to voice (experimental)",
+              "doctor_alerts": "Fleet health alerts"
+            },
+            "data_description": {
+              "context_max_chars": "How much Home Assistant entity state to put in the prompt (1000-200000). Higher means the agent sees more, at more tokens and latency.",
+              "thinking_timeout": "How long Assist waits for the agent before giving up (10-3600).",
+              "session_idle_window": "How long related turns reuse the same bridge session before the conversation context rotates.",
+              "enable_streaming": "Lower TTS latency by streaming the reply as it is generated. Only helps with a streaming-capable TTS engine; otherwise falls back to non-streaming.",
+              "doctor_alerts": "Raise a repair issue when the bridge reports a CRITICAL fleet problem. Off by default."
+            }
+          }
+        }
+      }
+    }
+  },
+  "issues": {
+    "bridge_drift": {
+      "title": "Agent Bridge has drifted from its tested baseline",
+      "description": "The bridge reports changes past the integration's tested baseline ({tested_version}): {reasons}. Review the bridge changelog and update the integration if needed. Live bridge version: {live_version}."
+    },
+    "fleet_doctor": {
+      "title": "Agent Bridge fleet health: {verdict}",
+      "description": "The bridge doctor reports a {verdict} verdict: {findings}. Review the bridge for detail."
+    }
+  },
+  "config_subentries": {
+    "conversation": {
+      "initiate_flow": {
+        "user": "Add agent",
+        "reconfigure": "Edit instructions"
+      },
+      "step": {
+        "user": {
+          "title": "Select a crew",
+          "description": "Pick a crew to narrow the agent list, or choose All crews.",
+          "data": {
+            "crew": "Crew"
+          }
+        },
+        "agent": {
+          "title": "Select an agent",
+          "description": "Only conversational agents are listed (no models, chatbots, workerbots or orchestrators).",
+          "data": {
+            "agent_id": "Agent",
+            "prompt": "Instructions"
+          },
+          "data_description": {
+            "prompt": "Instructions sent to the agent each turn -- tells it the request is from Home Assistant and to actuate via its Home Assistant tools."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit instructions",
+          "data": {
+            "prompt": "Instructions"
+          }
+        }
+      },
+      "abort": {
+        "no_agents": "No selectable agents were found on the bridge."
+      }
+    }
+  }
 }

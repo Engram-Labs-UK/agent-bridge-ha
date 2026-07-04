@@ -161,7 +161,86 @@ class TestConfigFlow:
         assert result["data"][CONF_VOICE_AGENT] == "cora"
 
 
+class TestSetupSslVerify:
+    """CR-0016 Item 4: self-signed bridges can onboard -- SSL verify is a
+    first-run choice (default on), stored into the created entry's options."""
+
+    @pytest.mark.asyncio
+    async def test_user_step_ssl_verify_disabled(self):
+        flow = AgentBridgeConfigFlow()
+        flow.hass = MagicMock()
+
+        with patch(
+            "custom_components.agent_bridge.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.agent_bridge.config_flow.BridgeClient"
+        ) as MockClient:
+            instance = MockClient.return_value
+            instance.check_alive = AsyncMock(return_value=True)
+            instance.discover = AsyncMock(return_value=[{"id": "cora", "name": "Cora"}])
+
+            result = await flow.async_step_user(
+                {
+                    CONF_BRIDGE_URL: "https://bridge:18780",
+                    CONF_BRIDGE_TOKEN: "tok",
+                    "ssl_verify": False,
+                }
+            )
+        assert result["step_id"] == "agents"
+        assert MockClient.call_args.kwargs.get("ssl_verify") is False
+
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
+        result = await flow.async_step_agents({CONF_DEFAULT_AGENT: "cora"})
+        assert result["options"]["ssl_verify"] is False
+
+    @pytest.mark.asyncio
+    async def test_user_step_ssl_verify_defaults_on(self):
+        flow = AgentBridgeConfigFlow()
+        flow.hass = MagicMock()
+
+        with patch(
+            "custom_components.agent_bridge.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.agent_bridge.config_flow.BridgeClient"
+        ) as MockClient:
+            instance = MockClient.return_value
+            instance.check_alive = AsyncMock(return_value=True)
+            instance.discover = AsyncMock(return_value=[{"id": "cora", "name": "Cora"}])
+
+            await flow.async_step_user(
+                {CONF_BRIDGE_URL: "http://bridge:18780", CONF_BRIDGE_TOKEN: "tok"}
+            )
+        assert MockClient.call_args.kwargs.get("ssl_verify") is True
+
+
 class TestOptionsFlow:
+
+    @pytest.mark.asyncio
+    async def test_agent_options_discovery_sends_caller_id(self):
+        """BG0015: the options-flow discovery client must carry the caller header
+        (BG0004 parity with the subentry flow's _discover_agents)."""
+        entry = MagicMock()
+        entry.data = {
+            CONF_BRIDGE_URL: "http://bridge:18780",
+            CONF_BRIDGE_TOKEN: "tok",
+            CONF_DEFAULT_AGENT: "openclaw-openclaw-cora",
+        }
+        entry.options = {}
+        flow = AgentBridgeOptionsFlow(entry)
+        flow.hass = MagicMock()
+
+        with patch(
+            "custom_components.agent_bridge.config_flow.async_get_clientsession"
+        ), patch(
+            "custom_components.agent_bridge.config_flow.BridgeClient"
+        ) as MockClient:
+            instance = MockClient.return_value
+            instance.discover = AsyncMock(return_value=[{"id": "cora", "name": "Cora"}])
+            options = await flow._get_agent_options()
+
+        assert options == {"cora": "Cora"}
+        assert MockClient.call_args.kwargs.get("caller_id") == "openclaw-openclaw-cora"
 
     @pytest.mark.asyncio
     async def test_shows_form(self):

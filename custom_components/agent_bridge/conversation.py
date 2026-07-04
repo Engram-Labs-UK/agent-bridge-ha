@@ -514,17 +514,79 @@ async def _stream_chat(
     return "".join(parts) if parts else None
 
 
+# BG0012: longest text the delta adapter buffers while a leading [confirm:LEVEL]
+# marker is still possible ("[confirm:normal] " is 17 chars; leave headroom).
+_MARKER_PROBE_MAX = 24
+
+
+def _may_be_confirm_prefix(text: str) -> bool:
+    """Whether ``text`` could still grow into a leading ``[confirm:LEVEL]`` marker."""
+    head = text.lstrip()
+    if not head:
+        # Whitespace only so far -- still possible, but bounded by the same
+        # probe cap so a pathological all-whitespace stream cannot buffer forever.
+        return len(text) <= _MARKER_PROBE_MAX
+    prefix = "[confirm:"
+    if len(head) < len(prefix):
+        return prefix.startswith(head)
+    if not head.startswith(prefix):
+        return False
+    # "[confirm:" seen; possible until the closing bracket arrives (bounded probe).
+    return "]" not in head and len(head) <= _MARKER_PROBE_MAX
+
+
 async def _to_delta_stream(
     deltas: AsyncIterator[str],
+    severity_out: dict[str, str | None] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Adapt the bridge's plain-text deltas to HA's ``AssistantContentDeltaDict``
     stream (US0033): a leading ``{"role": "assistant"}`` then a ``{"content": ...}``
     per non-empty chunk, as ``ChatLog.async_add_delta_content_stream`` expects.
+
+    BG0012: this stream feeds streaming TTS and the stored ChatLog turn, so a
+    leading ``[confirm:LEVEL]`` marker (US0036) must be stripped *here*, before
+    any content is emitted -- not after the stream completes. The head of the
+    stream is buffered only while it could still be a marker (bounded by
+    :data:`_MARKER_PROBE_MAX`); the parsed severity is recorded in
+    ``severity_out["severity"]`` for the caller's confirm handling.
     """
     yield {"role": "assistant"}
+    buffer = ""
+    buffering = True
+    strip_next = False
     async for chunk in deltas:
-        if chunk:
+        if not chunk:
+            continue
+        if not buffering:
+            if strip_next:
+                chunk = chunk.lstrip()
+                if not chunk:
+                    continue
+                strip_next = False
             yield {"content": chunk}
+            continue
+        buffer += chunk
+        if _CONFIRM_MARKER.match(buffer):
+            text, severity = _parse_confirm_marker(buffer)
+            if severity_out is not None and severity:
+                severity_out["severity"] = severity
+            buffering = False
+            if text:
+                yield {"content": text}
+            elif severity:
+                # Marker consumed the whole buffer; drop the whitespace that may
+                # open the next chunk so TTS does not start mid-pause.
+                strip_next = True
+        elif not _may_be_confirm_prefix(buffer):
+            buffering = False
+            yield {"content": buffer}
+    if buffering and buffer:
+        # Stream ended while the head was still marker-shaped; resolve now.
+        text, severity = _parse_confirm_marker(buffer)
+        if severity_out is not None and severity:
+            severity_out["severity"] = severity
+        if text:
+            yield {"content": text}
 
 
 def _messages_from_chat_log(chat_log: ChatLog) -> list[dict[str, Any]]:
@@ -777,6 +839,9 @@ class AgentBridgeConversationEntity(ConversationEntity):
             # fallback runs ONLY when streaming added nothing -- never both, which
             # would double-append (e.g. an empty/partial stream).
             n_before = len(chat_log.content)
+            # BG0012: the adapter strips a leading [confirm:LEVEL] before any
+            # delta reaches TTS/ChatLog and reports the severity here.
+            severity_holder: dict[str, str | None] = {}
             try:
                 deltas = await self.client.chat_stream(
                     messages,
@@ -785,7 +850,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
                     caller_context=caller_context,
                 )
                 async for _content in chat_log.async_add_delta_content_stream(
-                    self.entity_id, _to_delta_stream(deltas)
+                    self.entity_id, _to_delta_stream(deltas, severity_holder)
                 ):
                     pass
             except Exception as err:  # any stream failure falls back to non-streaming
@@ -795,7 +860,7 @@ class AgentBridgeConversationEntity(ConversationEntity):
                 # use it and skip the fallback to avoid a duplicate turn.
                 last = chat_log.content[-1]
                 text = getattr(last, "content", "") or ""
-                text, severity = _parse_confirm_marker(text)
+                severity = severity_holder.get("severity")
                 streamed = True
 
         if not streamed:

@@ -1,27 +1,22 @@
 # Technical Requirements Document
 
 **Project:** Agent Bridge HA
-**Version:** 0.10.0
-**Status:** Draft
-**Last Updated:** 2026-06-09
-**Last Review:** 2026-06-09 — RV0006 release-gate review (0.10.0)
+**Version:** 0.11.1
+**Status:** Current
+**Last Updated:** 2026-07-04
+**Last Review:** 2026-07-04 — CR-0011 full reconcile against the shipped integration
 **PRD Reference:** [PRD](prd.md)
 
-> **Currency note (RV0006, 2026-06-09).** This TRD predates the CR-0006..CR-0010 pass;
-> several sections are stale. Authoritative deltas, until the full reconcile (tracked in
-> **CR-0011**):
-> - **No HA-side tool loop.** The §4 tool-execution flow and **ADR-005** are SUPERSEDED —
->   the agent actuates via its own `/api/mcp` mount (Option A, US0027/US0031);
->   `tool_executor.py` does not exist.
-> - **New client methods / endpoints:** `agent_usage` (`GET /v1/agents/{id}/usage`),
->   `doctor` (`GET /v1/doctor`), `memory_record`/`memory_recall` (`POST`/`GET /v1/agents/{id}/memory`).
-> - **CoordinatorData** gained `NotRequired` `tool_surface`, `read_only_safe`, `usage`, `doctor`;
->   discovery uses `include=crew`.
-> - **New platforms/modules:** `ai_task.py`, `diagnostics.py`, `drift.py` (+ a `fleet_doctor`
->   repair issue), `webhook.py`. `tool_executor.py` removed.
-> - **Tested bridge baseline:** `4.141.0` (was 4.36).
-
-> ⚠️ **Review banner (2026-06-01):** This TRD targets **Agent Bridge v3.1.0+** and HA's legacy conversation API; both have drifted. A verified audit (CR-0002) found: **(a)** the reactive `tool_calls` actuation loop is inert — neither HA nor the **v4.36** bridge carries a `tool_calls` contract; **(b)** the component is on HA's legacy `AbstractConversationAgent`/`async_set_agent`, not `ConversationEntity`/`ChatLog`/LLM-API; **(c)** request/response shapes drifted: `/v1/tools/invoke` (`agent`/`tool`, not `agent_id`/`tool_name`), `/v1/broadcast` (`messages[]`+`tags`, responses-object), SSE (`event:message {text}` + `event:done`, **not** `choices[].delta`/`[DONE]`), webhook health (`{agentId,healthy}`). The redesign + the full TRD rewrite to the v4.36/ConversationEntity model are **[CR-0002](change-requests/cr0002.md)** / **[EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md)** (rewrite tracked by **US0030**). Sections below are the **v0.1 record**; the two clear factual errors are corrected inline this pass.
+> **Currency note (CR-0011, 2026-07-04).** This TRD was fully reconciled against the
+> shipped code (0.11.x on this branch; tested baseline **bridge v4.141.0 / HA 2026.2.3**,
+> per `const.TESTED_*`). The interfaces, endpoints, data models, module tables, and repo
+> structure below describe **reality as shipped**: the `ConversationEntity`/`ChatLog`
+> design with agent-side actuation (Option A — see **ADR-006**, which supersedes ADR-005),
+> the CR-0009/CR-0010 client methods, the CR-0014 hardened webhook lifecycle, and CR-0015
+> URL-encoded path parameters. The superseded v0.1 tool-execution design lives in git
+> history and in the retained (superseded) ADR-005 record. The 2026-06-01 audit that
+> triggered the redesign is [CR-0002](change-requests/cr0002.md) /
+> [EP0007](epics/EP0007-bridge-v436-modern-ha-realignment.md).
 
 ---
 
@@ -31,24 +26,26 @@
 Define the technical architecture for Agent Bridge HA -- a Home Assistant custom component that exposes Agent Bridge agents as native HA conversation agents with entity exposure, room awareness, health monitoring, and automation events.
 
 ### Scope
-- Async HTTP client for the Agent Bridge REST API
-- HA config flow with bridge discovery and agent selection
-- DataUpdateCoordinator for bridge health polling
-- Conversation agent registration (single default + optional per-agent)
-- Entity exposure system (HA entity state formatted for AI consumption)
-- Room/area awareness for voice requests
-- HA service execution from agent tool_call responses (the mechanism by which agents control the home)
-- Sensor, binary_sensor, and event entity platforms
-- HA services for message sending and tool invocation
+- Async HTTP client for the Agent Bridge REST API (chat, streaming, discovery, health, usage, doctor, memory, agent-context, webhooks)
+- HA config flow with bridge discovery, agent selection, and per-agent conversation subentries
+- DataUpdateCoordinator for bridge health/discovery/usage/doctor polling
+- One `ConversationEntity` per bridge agent (config subentries) plus per-agent `ai_task` entities
+- Entity exposure system (HA entity state formatted as an AI grounding hint)
+- Room/area awareness and structured `caller_context` for voice requests
+- Agent-side actuation boundary (Option A): the agent controls the home via its own `/api/mcp` mount; HA emits a per-turn audit event (ADR-006)
+- Sensor, binary_sensor, event, and diagnostics platforms
+- HA services for message sending, tool invocation, broadcast, camera-image asks, announcements, and agent memory
+- Hardened webhook subscription for real-time bridge events (CR-0014) and bridge-drift defences (US0029)
 - HACS distribution
 
 ### Key Decisions
 - Thin adapter: all routing, resilience, and agent management delegated to the bridge
 - No new pip dependencies beyond what HA bundles (aiohttp, voluptuous)
-- Per-agent entities gated behind an option flag (opt-in, not default)
-- Entity exposure cherry-picked from OpenClaw fork patterns (proven in production)
-- Conversation history managed by bridge channels, not by the integration
-- Polling-first for health (webhooks deferred to Phase 2)
+- Per-agent entities created via config subentries (operator-driven, US0025)
+- Entity exposure cherry-picked from OpenClaw fork patterns (proven in production), reframed as a fail-closed grounding hint
+- Cross-turn agent context managed by bridge channels (idle-windowed keys, US0032); per-conversation history via HA's `ChatLog`
+- Actuation is agent-owned via `/api/mcp` — no HA-side tool loop (ADR-006)
+- Polling plus a hardened webhook subscription for real-time events (CR-0014)
 
 ---
 
@@ -105,21 +102,22 @@ HA custom component (thin adapter with coordinator pattern).
 
 | Component | Responsibility | Technology |
 |-----------|---------------|------------|
-| Bridge Client | HTTP communication with Agent Bridge REST API | aiohttp (HA shared session) |
-| Config Flow | UI-driven setup and options | HA ConfigFlow, voluptuous |
-| Data Coordinator | Periodic bridge health/discovery polling | HA DataUpdateCoordinator |
-| Conversation Entity | HA Assist front-end, one per agent (config subentries); free-text forward + grounding hint via `_async_handle_message`/`ChatLog` | HA `ConversationEntity` (EP0007) |
-| ~~Tool Executor~~ | _Retired (EP0007): the agent actuates HA itself via its own `/api/mcp` mount; no HA-side tool loop_ | — |
-| Entity Exposure | Format HA entity state as a grounding **hint** for the agent (fail-closed) | HA entity/device/area registries |
-| Drift Defences | Fetch `/v1/agent-context` on `bridge:upgraded`, raise an HA repair issue past baseline | HA issue registry (`drift.py`) |
-| Sensor Platform | Bridge health and agent count sensors | HA SensorEntity |
-| Binary Sensor Platform | Connectivity and per-agent health sensors | HA BinarySensorEntity |
-| Event Platform | Message and tool invocation events | HA EventEntity |
-| Service Handler | send_message, invoke_tool, broadcast services | HA service registry |
-| Session Manager | Agent-scoped session persistence via HA Store (lives in `__init__.py`, not a separate file) | HA Store (`.storage/`) |
+| Bridge Client (`client.py`) | HTTP communication with Agent Bridge REST API; typed errors; URL-encoded path parameters (CR-0015) | aiohttp (HA shared session) |
+| Config Flow (`config_flow.py`) | UI-driven setup (first-run SSL toggle, CR-0016), options (Essentials + Advanced, CR-0007), and conversation subentries (crew → agent → instructions, CR-0003) | HA ConfigFlow/ConfigSubentryFlow, voluptuous |
+| Data Coordinator (`coordinator.py`) | Periodic bridge health/discovery polling; usage + doctor refresh on the discovery cadence; validated webhook pushes (CR-0014) | HA DataUpdateCoordinator |
+| Conversation Entity (`conversation.py`) | HA Assist front-end, one per agent (config subentries); free-text forward + grounding hint + `caller_context` via `_async_handle_message`/`ChatLog`; confirm-marker handling (US0036/BG0012); actuation audit event | HA `ConversationEntity` (EP0007) |
+| AI Task Platform (`ai_task.py`) | One `ai_task` entity per agent for `generate_data` (structured JSON / summaries, US0039) | HA `AITaskEntity` |
+| Entity Exposure (`exposure.py`) | Format HA entity state as a grounding **hint** for the agent (fail-closed); recent-changes summary (US0034) | HA entity/device/area registries |
+| Drift Defences (`drift.py`) | Fetch `/v1/agent-context` on setup + `bridge:upgraded`, raise an HA repair issue past baseline (US0029); opt-in fleet-doctor repair issue on CRITICAL (CR-0009/CR-0012) | HA issue registry |
+| Webhook Handler (`webhook.py`) | Persistent local-only/POST-only HA webhook; bridge subscription lifecycle incl. stale-subscription cleanup (CR-0014); event dispatch to coordinator/bus | HA webhook component |
+| Diagnostics (`diagnostics.py`) | Redacted config-entry diagnostics download (doctor, usage, agents, tool surface) (CR-0009) | HA diagnostics platform |
+| Sensor Platform (`sensor.py`) | Bridge status + agent count sensors; per-agent tokens + estimated-cost sensors (CR-0009) | HA SensorEntity |
+| Binary Sensor Platform (`binary_sensor.py`) | Bridge connectivity sensor | HA BinarySensorEntity |
+| Event Platform (`event.py`) | Message Received event entity | HA EventEntity |
+| Service Handler (`services.py`) | send_message, invoke_tool, broadcast, ask_with_image, announce, memory_record, memory_recall services; default-agent fallback + `ServiceValidationError` (CR-0016) | HA service registry |
+| Session Continuity | Idle-windowed bridge channel keys per scope (in `conversation.py`, US0032); the bridge persists per-channel context | Internal (in-memory epochs) |
 | Continuation Detector | Analyse agent responses for follow-up question patterns | Internal (in conversation.py) |
-| Voice Debug Logger | Detailed logging of voice routing decisions (agent, session, area) | Python logging |
-| Helpers | Response text extraction, text normalisation | Internal |
+| Helpers (`helpers.py`) | Response text extraction, caller-id resolution, agent selectability/crew/label helpers | Internal |
 
 ### Reactive vs Proactive Boundary (EP0007 / US0030)
 
@@ -156,8 +154,8 @@ turn (no bridge passthrough CR required for the chosen design).
 
 | Category | Technology | Version | Rationale |
 |----------|-----------|---------|-----------|
-| Language | Python | 3.12+ | HA requirement |
-| Framework | Home Assistant Core | 2025.1.0+ | Target platform |
+| Language | Python | 3.13 (CI) | HA requirement |
+| Framework | Home Assistant Core | 2025.7.0+ (HACS floor); tested pin 2026.2.3 (US0029) | Target platform |
 | HTTP Client | aiohttp | (HA bundled) | HA's standard async HTTP, already in runtime |
 | Validation | voluptuous | (HA bundled) | HA's standard config validation |
 
@@ -184,39 +182,90 @@ turn (no bridge passthrough CR required for the chosen design).
 ### API Style
 The integration is a **consumer** of the Agent Bridge REST API, not a provider. It does not expose its own API endpoints (beyond HA's standard entity/service framework).
 
-### Bridge API Endpoints Consumed
+### Bridge API Endpoints Consumed (client methods)
 
-| Method | Path | Purpose | Auth |
-|--------|------|---------|------|
-| `GET` | `/health` | Connectivity check and bridge status | No |
-| `GET` | `/health?depth=shallow` | Bridge status + agent counts (polling) | No |
-| `GET` | `/v1/health` | Per-agent readiness (tri-state rollup, `toolSurface`, `readOnlySafe`) | Yes |
-| `GET` | `/v1/discovery` | Agent list with capabilities and health | Yes |
-| `POST` | `/v1/chat/completions` | Send message to agent | Yes |
-| `POST` | `/v1/tools/invoke` | Invoke agent tool | Yes |
-| `POST` | `/v1/broadcast` | Send to multiple agents | Yes |
-| `POST` | `/v1/webhooks` | Register event subscription (Phase 2) | Yes |
-| `DELETE` | `/v1/webhooks/:id` | Remove event subscription (Phase 2) | Yes |
+All endpoints are wrapped by `BridgeClient` methods. Path parameters (agent ids,
+subscription ids) are **URL-encoded** before interpolation (`urllib.parse.quote`,
+CR-0015), so an id containing `/`, spaces, or unicode cannot break the path.
+
+| Client method | Method | Path | Purpose | Auth |
+|---------------|--------|------|---------|------|
+| `check_alive()` | `GET` | `/health` | Connectivity check (5s timeout) | No |
+| `health(depth)` | `GET` | `/health?depth={shallow\|deep}` | Bridge status + agent counts (polling) | No |
+| `agent_health()` | `GET` | `/v1/health` | Per-agent readiness (tri-state `bridge` rollup, `toolSurface`, `readOnlySafe` — US0028) | Yes |
+| `discover(include)` | `GET` | `/v1/discovery[?include=crew]` | Agent list with capabilities, health, and crew | Yes |
+| `agent_context()` | `GET` | `/v1/agent-context` | Machine-readable changelog (version, capabilities, deprecations) for the drift check (US0029) | Yes |
+| `agent_usage(agent_id)` | `GET` | `/v1/agents/{id}/usage` | Per-agent token + cost telemetry (CR-0009) | Yes |
+| `doctor()` | `GET` | `/v1/doctor` | One-call fleet diagnosis (CR-0009) | Yes |
+| `memory_record(agent_id, content, tags)` | `POST` | `/v1/agents/{id}/memory` | Record a memory item (CR-0010) | Yes |
+| `memory_recall(agent_id, query)` | `GET` | `/v1/agents/{id}/memory[?q=]` | Recall memory items; `?q=` is best-effort (CR-0010) | Yes |
+| `chat(...)` / `chat_stream(...)` | `POST` | `/v1/chat/completions` | Send message to agent (optionally streaming) | Yes |
+| `invoke_tool(agent_id, tool_name, args)` | `POST` | `/v1/tools/invoke` | Invoke agent tool (v4.36 `agent`/`tool` body) | Yes |
+| `broadcast(message, tags)` | `POST` | `/v1/broadcast` | Send to multiple agents (`messages[]` + `tags`; tags default `['operator']`) | Yes |
+| `register_webhook(url, events)` | `POST` | `/v1/webhooks` | Register event subscription | Yes |
+| `unregister_webhook(id)` | `DELETE` | `/v1/webhooks/{id}` | Remove event subscription | Yes |
+
+The consumed set is pinned by a contract test (`tests/test_openapi_contract.py`)
+against a captured slice of the bridge's `GET /v1/openapi.json` (CR-0008).
+
+### Crew-Aware Discovery and Agent Naming
+
+`discover(include=["crew"])` requests the v4.36 `?include=crew` projection — the
+only place per-agent crew membership is exposed, as a nested
+`crew: {team, visibleCrews}` block (CR-0003). The integration uses it in three
+places:
+
+- **Pickers** (config flow step 2, options flow, subentry flow): agents are listed
+  as `name (crew)` via `helpers.agent_label()`, filtered to real, selectable agents
+  by `helpers.is_selectable_agent()` (no orchestrators, chatbots, workerbots, or
+  bare model passthroughs).
+- **Entity naming** (BG0005): conversation/AI-task/usage entities are named from
+  the discovery label, never the raw agent id.
+- **Coordinator data**: `AgentInfo.crew` is populated on every discovery poll.
+
+Every request also carries the `x-bridge-mcp-caller` header set to the configured
+default agent (a registered agent id — BG0004), so the bridge can resolve the
+caller's crew for cross-agent dispatch; a 403 with a caller-identity error code is
+surfaced as `BridgeCallerError`, distinct from a bad token.
 
 ### Chat Request Format (sent to bridge)
 
 ```python
 {
     "messages": [
-        {"role": "system", "content": "<room_context>\n<entity_context>\n<extra_system_prompt>"},
-        {"role": "user", "content": "<user_message>"}
+        {"role": "system", "content": "<instructions>\n\n<source_block>\n\n<entity_context>\n\n<extra_system_prompt>"},
+        {"role": "user", "content": "<user_message>"}       # plus prior ChatLog turns
     ],
-    "agent": "<agent_id>",              # From config: default_agent or voice_agent
-    "channel": "<agent_scoped_session>", # Persistent session for multi-turn context
-    "metadata": {                        # Optional voice context (omitted for text input)
-        "source": "voice",               # "voice" or "text" -- agents use this to format responses
-        "device_id": "<ha_device_id>",   # HA device registry ID of the input device
-        "satellite_id": "<ha_sat_id>",   # Satellite ID (HA 2025+, may differ from device_id)
-        "area": "<area_name>",           # Resolved human-readable area name (e.g. "Kitchen")
-        "language": "<language_code>"    # e.g. "en" -- from ConversationInput.language
-    }
+    "agent": "<agent_id>",               # The entity's bridge agent
+    "channel": "ha:<agent_id>:<scope>:<epoch>",  # Idle-windowed session channel (US0032)
+    "caller_context": {                  # Structured speaker/source/location envelope
+        "source_type": "voice",          # "voice" | "text" | "automation"
+        "source_system": "home_assistant",
+        "language": "en",                # From ConversationInput.language
+        "local_time": "2026-07-04 09:30",
+        "timezone": "Europe/London",
+        "audio_only": True,              # Voice turns only
+        "device_id": "<ha_device_id>",   # Voice turns only
+        "device_name": "Kitchen satellite",
+        "satellite_id": "<ha_sat_id>",   # When it differs from device_id
+        "area": "Kitchen",               # Resolved area / floor
+        "floor": "Ground floor",
+        "account": {"name": "Darren", "verified": False},
+        "presence": "home: Darren; away: ...",       # US0034 grounding
+        "upcoming": "next alarm 07:00; calendar: ...",
+        "recent_changes": "<recent state changes among exposed entities>"
+    },
+    "attachments": [                      # ask_with_image only (US0035)
+        {"id": "ha-camera-camera.front", "mime_type": "image/jpeg",
+         "base64": "<...>", "source": {"bot_id": "homeassistant"}}
+    ]
 }
 ```
+
+The envelope is also rendered into the system prompt as a labelled
+`[home-assistant-source]` block, kept separate from the user utterance so the
+agent cannot confuse metadata with intent. Automation-sourced turns instruct the
+agent to apply stricter safety gating (no human present).
 
 ### Chat Response Format (received from bridge)
 
@@ -239,120 +288,67 @@ The integration is a **consumer** of the Agent Bridge REST API, not a provider. 
 }
 ```
 
-### Chat Response with Tool Calls (received from bridge)
+### Actuation Flow (Option A — see ADR-006)
 
-When the agent decides to control HA devices, it returns tool_calls instead of (or alongside) content:
-
-```python
-{
-    "id": "chatcmpl-xxx",
-    "object": "chat.completion",
-    "created": 1712345678,
-    "model": "kimi-k2.5:cloud",
-    "agent": "cora",
-    "choices": [
-        {
-            "index": 0,
-            "message": {
-                "role": "assistant",
-                "content": None,
-                "tool_calls": [
-                    {
-                        "id": "call_abc123",
-                        "type": "function",
-                        "function": {
-                            "name": "execute_service",
-                            "arguments": "{\"domain\": \"light\", \"service\": \"turn_on\", \"entity_id\": \"light.kitchen\"}"
-                        }
-                    }
-                ]
-            },
-            "finish_reason": "tool_calls"
-        }
-    ]
-}
-```
-
-### Tool Call Execution Flow
+There is **no tool-call contract** between HA and the bridge: the reactive path
+sends free text and receives free text. Actuation happens on the agent's side,
+through the agent's own `/api/mcp` mount into Home Assistant.
 
 ```
 1. User: "Turn on the kitchen lights"
          │
-2. Integration builds system prompt (entity context + room)
+2. Integration builds the layered system prompt (instructions + source block
+   + entity grounding hint [+ safety caution]) and the caller_context envelope
          │
 3. POST /v1/chat/completions → Agent Bridge → Agent
          │
-4. Agent responds with tool_calls: execute_service(light.turn_on, light.kitchen)
+4. The AGENT reads live HA state and calls HA services via its own /api/mcp
+   mount (HA's MCP Server integration) — not via this component
          │
-5. Integration validates entity_id against exposure list
+5. Agent replies with the spoken confirmation ("Done — the kitchen lights
+   are on."), optionally prefixed [confirm:LEVEL] for safety-relevant asks
          │
-6. Integration calls: hass.services.async_call("light", "turn_on", target={"entity_id": "light.kitchen"})
-         │
-7. Integration sends tool result back to bridge:
-   POST /v1/chat/completions with tool_call result messages
-         │
-8. Agent formulates final response: "Done, I've turned on the kitchen lights."
-         │
-9. Integration returns ConversationResult with speech text
+6. Integration strips any confirm marker, fires agent_bridge_message_received
+   and agent_bridge_actuation_audit, and returns ConversationResult
 ```
 
-The tool call loop may iterate multiple times if the agent needs to call several services before formulating a final response.
+**Confirm-before-actuate contract (US0036):** for safety-relevant domains the
+grounding prompt instructs the agent to ask a yes/no question first, prefixed
+`[confirm:high]` (or `normal`/`low`). HA strips the marker from the spoken text —
+including mid-stream, before any delta reaches TTS or the stored `ChatLog` turn
+(BG0012) — surfaces the severity on the events, and keeps the conversation open
+for the answer.
 
-**Tool Executor Rules:**
-- **Loop cap:** Maximum 10 iterations per conversation turn. If the agent keeps returning tool_calls after 10 rounds, return an error message to the user ("Agent could not complete the request").
-- **Content + tool_calls:** When the response contains both `content` and `tool_calls`, execute the tool_calls first, then include the content as context in the next request. The final response to the user comes from the last agent reply that has content and no tool_calls.
-- **Batch execution:** When `execute_services` (plural) is the tool name, the `arguments` contain a list of service calls. Execute all in parallel via `asyncio.gather()`, collect results, and send them back as a single tool result.
-- **Error result format:** Failed tool calls return a descriptive JSON error (not a Python exception):
-  ```python
-  {"success": false, "error": "Entity light.kitchen not found in exposed entities"}
-  {"success": false, "error": "Service call timed out after 10s"}
-  {"success": false, "error": "Domain 'invalid' not found"}
-  ```
-- **Success result format:** Successful tool calls return confirmation:
-  ```python
-  {"success": true, "entity_id": "light.kitchen", "service": "light.turn_on"}
-  ```
+### SSE Streaming
 
-### Tool Call Message Format (sent back to bridge)
+The bridge client supports optional Server-Sent Events streaming for chat completions (opt-in via the `enable_streaming` option, US0033):
 
 ```python
-{
-    "messages": [
-        {"role": "system", "content": "<system_prompt>"},
-        {"role": "user", "content": "Turn on the kitchen lights"},
-        {"role": "assistant", "content": None, "tool_calls": [{"id": "call_abc123", ...}]},
-        {"role": "tool", "tool_call_id": "call_abc123", "content": "{\"success\": true}"}
-    ],
-    "agent": "cora",
-    "channel": "<session_id>"
-}
-```
-
-### SSE Streaming (Phase 2)
-
-The bridge client supports optional Server-Sent Events streaming for chat completions:
-
-```python
-# Stream request (adds stream=True to chat request)
+# Stream request (chat_stream() adds stream=True to the chat request)
 {
     "messages": [...],
     "agent": "cora",
-    "channel": "<session_id>",
+    "channel": "<session_channel>",
+    "caller_context": {...},
     "stream": True
 }
 
-# SSE chunks (text/event-stream)
-data: {"id": "chatcmpl-xxx", "choices": [{"delta": {"content": "I've"}}]}
-data: {"id": "chatcmpl-xxx", "choices": [{"delta": {"content": " turned"}}]}
-data: [DONE]
+# v4.36 SSE frames (text/event-stream) -- US0023
+event: message
+data: {"text": "I've"}
+
+event: message
+data: {"text": " turned"}
+
+event: done
 ```
 
 **Client behaviour:**
-- `chat()` accepts optional `stream: bool` parameter (default: `False`)
-- When streaming, returns an async iterator of content deltas
-- Conversation agent assembles deltas into complete `ConversationResult`
-- On SSE parse error or timeout, falls back to non-streaming retry
-- Streaming timeout configurable (default 300 seconds, separate from `thinking_timeout`)
+- `chat_stream()` returns an async iterator of content delta strings
+- Parses the v4.36 `event:message` / `data:{"text":...}` frames, terminated by `event:done` (or `{"done": true}`); the legacy OpenAI `choices[].delta.content` + `data:[DONE]` shape is still accepted for backward compatibility
+- The conversation entity adapts deltas to HA's `AssistantContentDeltaDict` stream and feeds `ChatLog.async_add_delta_content_stream` so TTS can start early; a leading `[confirm:LEVEL]` marker is stripped from the head of the stream before any content is emitted (BG0012)
+- On any streaming failure, falls back to the non-streaming path without double-appending the assistant turn
+- Streaming timeout 300 seconds (separate from `thinking_timeout`)
 
 ### Health Response Format (shallow)
 
@@ -383,7 +379,7 @@ data: [DONE]
 }
 ```
 
-### Discovery Response Format
+### Discovery Response Format (`?include=crew`)
 
 ```python
 {
@@ -392,13 +388,54 @@ data: [DONE]
             "id": "cora",
             "name": "Cora",
             "description": "Primary AI assistant",
-            "status": "healthy",
+            "status": "healthy",                      # legacy fallback
             "adapter": "http-openai",
             "capabilities": {"chat": true, "tools": ["web_search", "email"], "streaming": true},
-            "tags": ["primary", "nlp"]
+            "tags": ["primary", "nlp"],
+            "health": {"state": "ready", "circuit": "closed", "inflight": 0,
+                       "lastSeenAt": "...", "staleAfter": 90},      # CR-0097 block
+            "metrics": {"latency": 120, "requests": 42, "errors": 0},
+            "agentClass": "agent",                    # v4.x taxonomy
+            "identitySubstrate": "persona",
+            "isOrchestrator": false,
+            "effectiveModel": "kimi-k2.5:cloud",
+            "deprecated": false,
+            "crew": {"team": "home", "visibleCrews": ["home", "ops"]}  # include=crew only
         }
     ]
 }
+```
+
+An agent is `healthy` only when `health.state` is ready/healthy **and** the
+circuit is closed (busy/open-circuit/stale agents read distinctly).
+
+### Usage Response Format (`GET /v1/agents/{id}/usage` — CR-0009)
+
+```python
+{
+    "totals": {"totalIn": 120000, "totalOut": 45000, "turnCount": 87},
+    "estimatedTotalCostGBP": 1.23,      # absent/null when no pricing configured
+    "perModel": [{"model": "kimi-k2.5:cloud", ...}],
+    "perChannel": [{"channel": "ha:cora:dev:abc:1", ...}],
+    "range": {"from": "...", "to": "..."}
+}
+```
+
+### Doctor Response Format (`GET /v1/doctor` — CR-0009)
+
+```python
+{
+    "verdict": "WARNING",               # HEALTHY | WARNING | CRITICAL
+    "summary": "2 agents stale",
+    "findings": [{"severity": "warning", "area": "agents", "detail": "..."}],
+    "recommendations": ["..."]
+}
+```
+
+### Memory Response Format (`GET /v1/agents/{id}/memory` — CR-0010)
+
+```python
+{"agent": "cora", "items": [{"content": "The loft hatch sticks", "tags": ["house"]}]}
 ```
 
 ### Error Response Format (from bridge)
@@ -424,7 +461,8 @@ data: [DONE]
 | `AGENT_UNREACHABLE` | Return "Agent is currently unavailable" |
 | `CIRCUIT_OPEN` | Return "Agent is temporarily offline" |
 | `NO_CAPABLE_AGENT` | Return "No agent available to handle this request" |
-| `AUTH_REQUIRED` | Log error, mark bridge as disconnected |
+| `AUTH_ERROR` (401/403) | Return "There is an authentication problem with the bridge" |
+| `CALLER_ERROR` (403 caller-identity) | Return "The bridge does not recognise this Home Assistant's agent identity" (`BridgeCallerError`, distinct from a bad token — BG0004) |
 | `RATE_LIMITED` | Return "Agent is busy, please try again shortly" |
 | Connection refused | Mark bridge as disconnected, return "Bridge is offline" |
 
@@ -436,47 +474,101 @@ All error messages are user-friendly for voice output. No stack traces, error co
 
 ### Data Models
 
-#### Config Entry Data
+#### Config Entry Data (entry.data)
 
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | bridge_url | str | Required, valid URL | Bridge base URL |
 | bridge_token | str | Required, non-empty | Bearer token |
-| default_agent | str | Required, valid agent ID | Default chat agent |
-| voice_agent | str | Optional | Voice-specific agent |
-| context_max_chars | int | 1000-200000 | Max entity context chars |
-| context_strategy | str | truncate or clear | Overflow handling |
-| enable_per_agent_entities | bool | - | Per-agent entities flag |
-| enable_tool_calls | bool | - | Tool invocation flag |
-| thinking_timeout | int | 10-3600 | Agent response timeout (seconds) |
-| ssl_verify | bool | - | SSL certificate verification |
-| debug_logging | bool | - | Detailed voice routing logs |
+| default_agent | str | Required, valid agent ID | Default agent (also the `x-bridge-mcp-caller` identity — BG0004) |
+| voice_agent | str | Kept equal to default_agent | Voice agent |
+| webhook_id | str | Generated once | Persistent HA webhook id (CR-0014) |
+| webhook_subscription_id | str | Optional | Last bridge subscription id, for stale-subscription cleanup (CR-0014) |
+
+#### Config Entry Options (entry.options)
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| context_max_chars | int | 1000-200000, default 13000 | Max entity context chars (always truncate) |
+| thinking_timeout | int | 10-3600, default 120 | Agent response timeout (seconds) |
+| ssl_verify | bool | default true | SSL certificate verification (also first-run — CR-0016) |
+| session_idle_window | int | preset set {0, 300, 1800, 7200, 28800, 86400}, default 300 | Idle gap that rotates the session channel key (US0032/CR-0013) |
+| enable_streaming | bool | default false | Stream replies to TTS as deltas (US0033) |
+| doctor_alerts | bool | default false | Opt-in fleet-doctor repair issue (CR-0012) |
+
+#### Conversation Subentry Data (one per agent — US0025)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| agent_id | str | Bridge agent id |
+| crew | str | Crew membership (CR-0003) |
+| prompt | str | Operator-editable instructions folded into the system prompt |
 
 #### CoordinatorData (TypedDict)
 
 ```python
 class CoordinatorData(TypedDict):
     connected: bool
-    bridge_status: str                    # ok, degraded, error
+    bridge_status: str                    # ok, warning, error (tri-state mapped, US0028)
     bridge_version: str
     bridge_uptime: int
     agent_count_healthy: int
     agent_count_total: int
     agents: list[AgentInfo]
     last_poll: str                        # ISO timestamp
+    # /v1/health tri-state surface (US0028/AC4); only set on the success path, so
+    # the hard-error CoordinatorData omits them -- typed NotRequired, read via .get().
+    tool_surface: NotRequired[str]
+    read_only_safe: NotRequired[bool]
+    # CR-0009 observability, refreshed on the discovery cadence; read via .get().
+    usage: NotRequired[dict[str, dict[str, Any]]]   # AgentUsageSummary keyed by agent_id
+    doctor: NotRequired[dict[str, Any]]             # fleet-doctor verdict payload
 ```
 
-#### AgentInfo (TypedDict)
+`usage` and `doctor` are best-effort (an older bridge without the endpoints, or a
+transient per-agent failure, keeps the last-known values) and are carried forward
+through connectivity outages so sensors and the repair issue do not blank (BG0007).
+The coordinator emits shallow copies so consumers cannot mutate its working maps
+(BG0008).
+
+**Webhook push validation (CR-0014):** the HA webhook is unauthenticated by design
+(the id is the credential), so `async_push_webhook_data` validates pushed data
+before it reaches sensor state: a bridge-status push must be a string in the known
+health vocabulary (whitelist); a per-agent push must carry a typed `agentId: str` +
+`healthy: bool` exactly. Malformed pushes are ignored; a push for an unknown agent
+triggers a fresh poll instead of a blind write.
+
+#### AgentInfo (TypedDict — v4.x discovery surface, US0028)
 
 ```python
 class AgentInfo(TypedDict):
     id: str
     name: str
     description: str
-    healthy: bool                         # Mapped from discovery: status == "healthy" → True
+    healthy: bool             # health.state in (ready, healthy) AND circuit == closed
     adapter: str
     capabilities: dict[str, Any]
     tags: list[str]
+    # CR-0097 health block
+    health_state: str
+    circuit: str
+    inflight: int
+    last_seen_at: str
+    stale_after: int
+    # CR-0245 metrics
+    latency_ms: float
+    requests: int
+    errors: int
+    # CR-0256/0247/0259 taxonomy (voice-capability gating + pickers)
+    agent_class: str
+    identity_substrate: str
+    capability_envelope: dict[str, Any]
+    is_orchestrator: bool
+    framework: str
+    effective_model: str
+    model_provider: str
+    deprecated: bool
+    crew: str                 # from ?include=crew (CR-0003)
 ```
 
 ### Storage Strategy
@@ -484,9 +576,9 @@ class AgentInfo(TypedDict):
 | Data Type | Storage | Rationale |
 |-----------|---------|-----------|
 | Config | HA config entry (encrypted `.storage/`) | HA standard, secrets protected |
-| Session IDs | HA Store (`.storage/agent_bridge.sessions`) | Survive HA restarts, one per agent |
+| Session channel epochs | In-memory per conversation entity (US0032) | The bridge persists per-channel context (24h TTL); HA only rotates the key. The v0.1 HA Store was retired |
 | Coordinator state | In-memory | Rebuilt from bridge on each poll |
-| Conversation history | Bridge channels | Bridge owns persistence |
+| Conversation history | HA `ChatLog` (per conversation) + bridge channels (cross-turn agent context) | Bridge owns cross-session persistence |
 | Entity exposure | Computed per request | Must reflect current state |
 
 ---
@@ -509,10 +601,38 @@ Internal HA events (fired via `hass.bus.async_fire`):
 
 | Event | Trigger | Data Fields |
 |-------|---------|-------------|
-| `agent_bridge_message_received` | Agent responds to conversation | agent_id, model, content_preview, timestamp |
-| `agent_bridge_tool_invoked` | Tool invocation completes | agent_id, tool_name, status, duration_ms |
+| `agent_bridge_message_received` | Agent responds to conversation | agent_id, model, content_preview, awaiting_confirmation, severity |
+| `agent_bridge_actuation_audit` | Once per reactive conversation turn (US0027/AC3 — the HA-side hook US0031 wires to the bridge audit log) | agent_id, conversation_id, area, is_voice, source_type, account_verified, risky_domains_exposed, reply_preview, awaiting_confirmation, severity |
 | `agent_bridge_agent_discovered` | New agent appears in discovery | agent_id, name, capabilities |
 | `agent_bridge_agent_removed` | Agent disappears from discovery | agent_id, name |
+| `agent_bridge_bridge_upgraded` | Bridge `bridge:upgraded` webhook event (drift signal, US0024/US0029) | webhook event data |
+
+### Webhook Lifecycle (CR-0014)
+
+Bridge events reach HA through a hardened webhook subscription (`webhook.py`):
+
+1. **Persistent id:** the HA webhook id is generated once and stored in
+   `entry.data[CONF_WEBHOOK_ID]`; restarts reuse it, so the bridge subscription
+   does not churn. The id is the credential (HA webhooks are unauthenticated by
+   design) and is logged at DEBUG only.
+2. **Stale-subscription cleanup:** before registering, a bridge subscription
+   leaked by a previous unclean shutdown (persisted
+   `entry.data[CONF_WEBHOOK_SUBSCRIPTION_ID]`) is unregistered best-effort, so at
+   most one live subscription exists.
+3. **Hardened registration:** the HA webhook is registered `local_only=True` and
+   `allowed_methods=["POST"]` (the bridge posts from the LAN). A stale handler
+   left by a mid-setup failure is replaced rather than failing setup.
+4. **Bridge subscription:** `POST /v1/webhooks` subscribes the HA callback URL to
+   the full event catalogue (`agent:registered/unregistered/updated`,
+   `agent:health-changed`, `message:sent/error`, `bridge:upgraded`). Failure is
+   non-fatal — the integration falls back to polling.
+5. **Dispatch:** `agent:health-changed` → validated coordinator push;
+   roster events → immediate coordinator refresh; `bridge:upgraded` →
+   `agent_bridge_bridge_upgraded` (re-runs the drift check); `message:error` →
+   warning log. Non-object/invalid JSON payloads get a clean 400 (BG0014).
+6. **Unload:** the webhook is unregistered from both the bridge and HA;
+   registration runs before the options listener is added so persisting the ids
+   cannot trigger a reload loop.
 
 ---
 
@@ -542,12 +662,12 @@ Home Assistant (10.0.0.209)
     "name": "Agent Bridge",
     "codeowners": ["@DarrenBenson"],
     "config_flow": true,
-    "dependencies": [],
+    "dependencies": ["conversation"],
     "documentation": "https://github.com/Engram-Labs-UK/agent-bridge-ha",
     "iot_class": "local_polling",
     "issue_tracker": "https://github.com/Engram-Labs-UK/agent-bridge-ha/issues",
     "requirements": [],
-    "version": "0.1.0"
+    "version": "0.11.0"
 }
 ```
 
@@ -555,7 +675,7 @@ Home Assistant (10.0.0.209)
 - `config_flow: true` -- enables UI-based setup (Settings > Add Integration)
 - `iot_class: local_polling` -- bridge is local network, integration polls for data
 - `requirements: []` -- no pip dependencies beyond HA-bundled packages
-- `dependencies: []` -- no HA integration dependencies
+- `dependencies: ["conversation"]` -- the conversation component must be loaded before the per-agent entities
 
 ### HACS Distribution
 
@@ -563,7 +683,7 @@ Home Assistant (10.0.0.209)
 {
     "name": "Agent Bridge",
     "render_readme": true,
-    "homeassistant": "2025.1.0"
+    "homeassistant": "2025.7.0"
 }
 ```
 
@@ -574,38 +694,53 @@ agent-bridge-ha/
 ├── custom_components/
 │   └── agent_bridge/
 │       ├── __init__.py
+│       ├── ai_task.py
+│       ├── binary_sensor.py
 │       ├── client.py
 │       ├── config_flow.py
+│       ├── const.py
 │       ├── conversation.py
 │       ├── coordinator.py
+│       ├── diagnostics.py
+│       ├── drift.py
+│       ├── event.py
 │       ├── exposure.py
-│       ├── tool_executor.py
 │       ├── helpers.py
 │       ├── sensor.py
-│       ├── binary_sensor.py
-│       ├── event.py
 │       ├── services.py
-│       ├── const.py
+│       ├── webhook.py
 │       ├── manifest.json
 │       ├── services.yaml
 │       ├── strings.json
+│       ├── brand/
 │       └── translations/
 │           └── en.json
 ├── tests/
 │   ├── conftest.py
-│   ├── test_init.py
+│   ├── fixtures/
+│   │   └── bridge_openapi_contract.json
+│   ├── test_agent_selection.py
+│   ├── test_ai_task.py
+│   ├── test_binary_sensor.py
+│   ├── test_broadcast.py
 │   ├── test_client.py
 │   ├── test_config_flow.py
 │   ├── test_conversation.py
+│   ├── test_conversation_integration.py
 │   ├── test_coordinator.py
+│   ├── test_diagnostics.py
+│   ├── test_drift_surface.py
+│   ├── test_event.py
 │   ├── test_exposure.py
+│   ├── test_helpers.py
+│   ├── test_openapi_contract.py
 │   ├── test_sensor.py
-│   ├── test_binary_sensor.py
 │   ├── test_services.py
-│   ├── test_tool_executor.py
-│   └── test_helpers.py
+│   ├── test_streaming.py
+│   └── test_webhook.py
 ├── hacs.json
 ├── CLAUDE.md
+├── AGENTS.md
 ├── README.md
 ├── sdlc-studio/
 │   ├── prd.md
@@ -624,7 +759,14 @@ agent-bridge-ha/
 
 ```python
 DOMAIN = "agent_bridge"
-PLATFORMS = ["sensor", "binary_sensor", "event"]
+PLATFORMS = ["conversation", "sensor", "binary_sensor", "event", "ai_task"]
+
+# Config subentries (US0025) + per-agent instructions (CR-0003)
+SUBENTRY_TYPE_CONVERSATION = "conversation"
+CONF_AGENT_ID = "agent_id"
+CONF_CREW = "crew"
+CONF_PROMPT = "prompt"
+DEFAULT_PROMPT = "This request comes from Home Assistant Assist. ..."  # origin/role layer
 
 # Config entry keys
 CONF_BRIDGE_URL = "bridge_url"
@@ -632,31 +774,53 @@ CONF_BRIDGE_TOKEN = "bridge_token"
 CONF_DEFAULT_AGENT = "default_agent"
 CONF_VOICE_AGENT = "voice_agent"
 CONF_CONTEXT_MAX_CHARS = "context_max_chars"
-CONF_CONTEXT_STRATEGY = "context_strategy"
-CONF_ENABLE_PER_AGENT = "enable_per_agent_entities"
-CONF_ENABLE_TOOL_CALLS = "enable_tool_calls"
 CONF_THINKING_TIMEOUT = "thinking_timeout"
 CONF_SSL_VERIFY = "ssl_verify"
-CONF_DEBUG_LOGGING = "debug_logging"
+CONF_DOCTOR_ALERTS = "doctor_alerts"                    # CR-0012 opt-in repair
+CONF_WEBHOOK_SUBSCRIPTION_ID = "webhook_subscription_id" # CR-0014 stale-sub cleanup
+CONF_SESSION_IDLE_WINDOW = "session_idle_window"        # US0032
+CONF_ENABLE_STREAMING = "enable_streaming"              # US0033
 
 # Defaults
+DEFAULT_CALLER_ID = "homeassistant"        # last-resort x-bridge-mcp-caller
+DEFAULT_BRIDGE_URL = "http://localhost:18780"
 DEFAULT_CONTEXT_MAX_CHARS = 13000
-DEFAULT_CONTEXT_STRATEGY = "truncate"
 DEFAULT_THINKING_TIMEOUT = 120
-DEFAULT_POLL_INTERVAL = 30           # seconds
-DEFAULT_DISCOVERY_INTERVAL = 300     # seconds
-DEFAULT_TOOL_TIMEOUT = 10            # seconds per service call
+DEFAULT_SESSION_IDLE_WINDOW = 300
+SESSION_IDLE_PRESETS = (0, 300, 1800, 7200, 28800, 86400)  # CR-0013 dropdown
+DEFAULT_ENABLE_STREAMING = False
+DEFAULT_POLL_INTERVAL = 30                 # seconds
+DEFAULT_DISCOVERY_INTERVAL = 300           # seconds
+DEFAULT_STREAMING_TIMEOUT = 300            # seconds
 MAX_ENTITIES = 250
-MAX_TEXT_DEPTH = 8                   # recursive response text extraction
+MAX_TEXT_DEPTH = 8                         # recursive response text extraction
+
+# Drift baselines (US0029) -- keep the HA pin in sync with CI (Critical Rule 9)
+TESTED_BRIDGE_VERSION = "4.141.0"
+TESTED_HA_VERSION = "2026.2.3"
 
 # Event types
 EVENT_MESSAGE_RECEIVED = f"{DOMAIN}_message_received"
-EVENT_TOOL_INVOKED = f"{DOMAIN}_tool_invoked"
 EVENT_AGENT_DISCOVERED = f"{DOMAIN}_agent_discovered"
 EVENT_AGENT_REMOVED = f"{DOMAIN}_agent_removed"
+EVENT_BRIDGE_UPGRADED = f"{DOMAIN}_bridge_upgraded"
+EVENT_ACTUATION_AUDIT = f"{DOMAIN}_actuation_audit"     # US0027/AC3
+
+# Safety deny/confirm domains (US0027) -- folded into the grounding caution
+DENY_CONFIRM_DOMAINS = frozenset({"lock", "alarm_control_panel", "climate",
+                                  "water_heater", "cover"})
+
+# Bridge webhook event catalogue (US0024)
+BRIDGE_WEBHOOK_EVENTS = ("agent:registered", "agent:unregistered", "agent:updated",
+                         "agent:health-changed", "message:sent", "message:error",
+                         "bridge:upgraded")
 
 # Response text extraction priority keys
 TEXT_PRIORITY_KEYS = ("text", "content", "message", "output_text")
+
+# Continuation detection defaults (fixed constants)
+DEFAULT_CONTINUATION_PHRASES = (...)
+DEFAULT_CONTINUATION_EXCLUSIONS = (...)
 ```
 
 ### services.yaml
@@ -665,9 +829,13 @@ Defines the HA service schemas rendered in the developer tools UI:
 
 | Service | Fields | Required |
 |---------|--------|----------|
-| `send_message` | message (str), agent_id (str), session_id (str) | message |
+| `send_message` | message (str), agent_id (str — defaults to the configured default agent), session_id (str) | message |
 | `invoke_tool` | agent_id (str), tool_name (str), args (object) | agent_id, tool_name |
-| `broadcast` | message (str), tags (list[str]) | message |
+| `broadcast` | message (str), tags (list[str] — defaults to `['operator']`) | message |
+| `ask_with_image` | message (str), camera_entity_id (entity id), agent_id (str), session_id (str) | message, camera_entity_id |
+| `announce` | message (str), target (assist_satellite entity id), priority (low/normal/critical) | message, target |
+| `memory_record` | content (str), agent_id (str), tags (list[str]) | content |
+| `memory_recall` | query (str), agent_id (str) | — |
 
 ### strings.json / translations/en.json
 
@@ -693,22 +861,25 @@ User-facing strings for the config flow and options flow:
 
 | Threat | Likelihood | Impact | Mitigation |
 |--------|-----------|--------|------------|
-| Bridge token leaked in logs | Medium | High | Never log token value; redact in diagnostics |
-| Man-in-middle on bridge connection | Low | Medium | SSL/TLS support; warn if ssl_verify=false |
-| Malicious agent response (prompt injection) | Low | Medium | Tool execution validates entity_id against exposure list; only exposed entities targetable |
-| Rogue tool_call targets sensitive entity | Low | High | Entity validation before execution; only HA-exposed entities can be controlled |
+| Bridge token leaked in logs | Medium | High | Never log token value; redacted in the diagnostics download (with any orphaned `caller_id`) |
+| Man-in-middle on bridge connection | Low | Medium | SSL/TLS support; verification on by default (first-run toggle, CR-0016) |
+| Forged webhook push poisons sensor state | Medium | Medium | Webhook is local-only + POST-only; pushed status whitelisted against the health vocabulary; per-agent pushes require typed `agentId`/`healthy` (CR-0014) |
+| Webhook id leaked | Low | Medium | The id is the credential: generated once, persisted in the encrypted entry, logged at DEBUG only (CR-0014) |
+| Prompt injection via HA state into the agent | Low | Medium | Source metadata rendered in a labelled system block separate from the utterance; automation-sourced turns flagged for stricter gating |
+| Agent actuates a safety-relevant device unprompted | Low | High | Deny/confirm caution + `[confirm:LEVEL]` contract (US0036); exposure is fail-closed; the agent's own `/api/mcp` mount enforces HA's exposure/auth on the actuation side |
 | Excessive entity exposure | Low | Low | 250 entity cap; respects HA expose settings |
 
 ### Security Controls
 
 | Control | Implementation |
 |---------|----------------|
-| Authentication | Bearer token in Authorization header |
+| Authentication | Bearer token in Authorization header; `x-bridge-mcp-caller` caller identity (BG0004) |
 | Token storage | HA encrypted config entry (not plaintext) |
-| SSL/TLS | Supported with configurable verification |
-| Entity access | HA's native expose settings control what agents see |
-| Tool call validation | Only exposed entities can be targeted by tool_calls; entity_id checked against exposure list before execution |
-| Service call scope | Tool executor only calls HA services (domain.service); no shell execution, no file access, no network calls |
+| SSL/TLS | Supported with configurable verification (default on) |
+| Entity access | HA's native expose settings control what agents see in the grounding hint (fail-closed) |
+| Actuation boundary | No HA-side tool executor exists (ADR-006); actuation authority lives with the agent's `/api/mcp` mount, audited via `agent_bridge_actuation_audit` per reactive turn |
+| Webhook hardening | Local-only, POST-only registration; validated pushes; persistent id; stale-subscription cleanup (CR-0014) |
+| Diagnostics redaction | `bridge_token` and legacy `caller_id` redacted from the diagnostics download |
 
 ---
 
@@ -752,6 +923,8 @@ User-facing strings for the config flow and options flow:
 - Positive: Simpler implementation, no networking requirements
 - Negative: Up to 30s delay in health status updates (acceptable for homelab)
 
+*Update (CR-0014, 2026-07-04): Phase 2 shipped — polling remains the backbone, with a hardened webhook subscription layered on top for real-time pushes (see §7 Webhook Lifecycle). Webhook failure degrades gracefully to polling.*
+
 ### ADR-003: Per-Agent Entities as Opt-In
 
 **Status:** Accepted
@@ -764,6 +937,8 @@ User-facing strings for the config flow and options flow:
 - Positive: Clean default experience with one conversation agent
 - Positive: Power users can enable per-agent control
 - Negative: Two-step setup for multi-agent users (enable option, then configure pipelines)
+
+*Update (US0025/CR-0006, 2026-07-04): the option flag is gone — the opt-in intent survives as **config subentries**: the operator adds each agent explicitly (crew → agent → instructions), which is HA's modern pattern for per-agent entities.*
 
 ### ADR-004: Entity Exposure from OpenClaw Fork
 
@@ -780,11 +955,10 @@ User-facing strings for the config flow and options flow:
 
 ### ADR-005: Tool Execution Architecture
 
-**Status:** SUPERSEDED (EP0007 / CR-0006, 2026-06-09) — the HA-side tool-execution loop
-described here was removed. The agent actuates Home Assistant through its **own
-`/api/mcp` mount** (Option A, US0027/US0031); this integration runs no tool loop and
-parses no `tool_calls`. Retained for the historical record. A formal ADR for the
-agent-owned actuation boundary is tracked in CR-0011.
+**Status:** SUPERSEDED by **ADR-006** (EP0007 / CR-0006, 2026-06-09) — the HA-side
+tool-execution loop described here was removed. The agent actuates Home Assistant
+through its **own `/api/mcp` mount** (Option A, US0027/US0031); this integration runs
+no tool loop and parses no `tool_calls`. Retained for the historical record.
 
 **Context:** When an agent returns `tool_calls` in a chat completion response, the integration must execute HA services and return results. This involves several non-obvious design choices: how many iterations to allow, how to handle batch calls, what to do when the response contains both text content and tool_calls, and how to report failures.
 
@@ -815,13 +989,65 @@ Tool failures (entity not found, service timeout, invalid domain) are returned a
 - Positive: Accurate user responses grounded in actual tool outcomes
 - Negative: Extra round-trip when content + tool_calls arrive together (acceptable -- tool execution is already the slow path)
 
+### ADR-006: Agent-Owned Actuation via `/api/mcp` (Option A)
+
+**Status:** Accepted (EP0007, 2026-06-09; formalised by CR-0011, 2026-07-04). Supersedes ADR-005.
+
+**Context:** The CR-0002 audit found the ADR-005 tool-execution loop structurally
+inert: neither modern HA's conversation pipeline nor the v4.36+ bridge carries a
+`tool_calls` contract on the reactive path, so the loop could never fire — the
+integration described actuation it could not perform. The US0021 spike evaluated
+two designs: **(a)** round-tripping HA's LLM-API `llm.Tool` surface through the
+bridge (requires a bridge tool-call contract that does not exist), and **(b)** the
+refined **Option A** — the agent already runs its own harness with an HA MCP mount
+(the DBee pattern), so it can read and control Home Assistant directly via
+`/api/mcp` (HA's MCP Server integration). A live-fleet consult confirmed the
+agents prefer owning actuation.
+
+**Decision:** Actuation is **agent-owned**. This integration is the Assist
+front-end only: it forwards the utterance + a fail-closed entity grounding hint +
+the structured `caller_context` envelope as free text, and returns the agent's
+reply. It runs **no HA-side tool loop**, parses no `tool_calls`, and never calls
+`hass.services.async_call()` on the agent's behalf. The agent reads live HA state
+and actuates through its own `/api/mcp` mount, where HA's exposure and
+authentication apply (US0027/US0031). (The `agent_bridge.invoke_tool` service is a
+separate, operator-facing direct call to `/v1/tools/invoke` — not part of the
+conversation loop.)
+
+**Safety and audit surfaces:**
+- **Audit:** HA fires `agent_bridge_actuation_audit` (`EVENT_ACTUATION_AUDIT`)
+  once per reactive turn — agent, conversation id, area, source type, account
+  verification, exposed risky domains, reply preview, confirmation state. This is
+  the documented HA-side hook that US0031 wires to the bridge audit log; the
+  agent's mount emits the authoritative per-actuation event.
+- **Deny/confirm:** when exposed entities include safety-relevant domains
+  (`lock`, `alarm_control_panel`, `climate`, `water_heater`, `cover`), the
+  grounding prompt folds in a caution: ask a yes/no question first, prefixed
+  `[confirm:high]` (or `normal`/`low`). HA strips the marker, surfaces the
+  severity on its events, and keeps the conversation open (US0036). On the
+  streaming path the marker is stripped from the **head of the delta stream**,
+  before any content reaches TTS or the stored `ChatLog` turn (BG0012).
+- **Grounding, not authority:** the exposure context is a hint; the agent reads
+  live state back after acting to verify the result.
+
+**Consequences:**
+- Positive: The reactive path actually actuates — with no bridge protocol change
+- Positive: One actuation authority (the agent's mount) with HA-native
+  exposure/auth enforcement; no duplicated tool executor to keep in sync
+- Positive: Massive code cull (`tool_executor.py`, the loop cap, batch rules, and
+  `enable_tool_calls` all removed — CR-0006)
+- Negative: HA cannot observe individual service calls made by the agent; the
+  per-turn audit event + the agent-side audit log are the compensating record
+- Negative: Depends on each agent's harness mounting HA MCP correctly
+  (`toolSurface`/`readOnlySafe` from `/v1/health` diagnose that gap)
+
 ---
 
 ## 12. Open Technical Questions
 
 - [x] **Q:** Should the integration create a bridge channel per HA conversation ID for multi-turn voice?
   **Context:** Bridge channels persist conversation history. Creating one per HA conversation ID enables multi-turn voice dialogue. But channel cleanup becomes an issue if HA creates many short-lived conversations.
-  **Decision:** One session per agent (not per conversation_id), persisted to HA Store. Session ID format: `agent:{agent_id}:assist_{random_hex}`. Sent as `channel` field in chat requests. See PRD Session Persistence feature (EP0002).
+  **Decision:** One session per agent (not per conversation_id), persisted to HA Store. Session ID format: `agent:{agent_id}:assist_{random_hex}`. Sent as `channel` field in chat requests. See PRD Session Persistence feature (EP0002). *(Superseded by US0032: the HA Store was retired — the bridge persists per-channel context (24h TTL), and HA sends idle-windowed channel keys `ha:{agent_id}:{scope}:{epoch}` that rotate after an idle gap. See PRD Session Continuity.)*
 
 - [x] **Q:** How should entity exposure handle template entities and groups?
   **Context:** Template sensors and groups can have complex state. Should they be exposed as-is, or filtered?
@@ -832,10 +1058,10 @@ Tool failures (entity not found, service timeout, invalid domain) are returned a
 ## 13. Implementation Constraints
 
 ### Must Have
-- Compatible with Home Assistant Core 2025.1.0+
+- Compatible with Home Assistant Core 2025.7.0+ (HACS floor); built + CI-tested against the pinned HA **2026.2.3** on Python 3.13 (`const.TESTED_HA_VERSION` and CI `HA_VERSION` move together — US0029 / Critical Rule 9)
 - No additional pip dependencies (only HA-bundled packages)
 - HACS-installable repository structure
-- Works with Agent Bridge v4.36.0+ REST API (was "v3.1.0+" — corrected 2026-06-01; the v3.1-era contract has drifted, see review banner + CR-0002. Pin + CI against a current HA core per US0029.)
+- Works with Agent Bridge v4.x REST API; tested baseline **v4.141.0** (`const.TESTED_BRIDGE_VERSION`); the agent-context drift check raises a repair issue when the live bridge moves past the baseline
 - British English in all user-facing strings
 
 ### Won't Have (This Version)
@@ -857,3 +1083,4 @@ Tool failures (entity not found, service timeout, invalid domain) are returned a
 | 2026-04-05 | 0.1.2 | TRD review: fixed /v1/discovery auth, added tool executor rules, manifest.json spec, missing test files, resolved open questions, fixed hacs.json, documented status→bool mapping |
 | 2026-04-05 | 0.1.3 | Resolved all open questions (Q1: session-per-agent, Q2: expose all entity types as-is). Added ADR-005: Tool Execution Architecture (loop cap, content+tool_calls, parallel batch, JSON error format) |
 | 2026-06-09 | 0.10.0 | RV0006 release-gate review: added a currency note (top) with the post-CR-0006..0010 deltas; marked ADR-005 + §4 tool-execution SUPERSEDED (agent-owned `/api/mcp` actuation). Full interface/endpoint/module reconcile tracked in CR-0011. |
+| 2026-07-04 | 0.11.1 | CR-0011 full reconcile to shipped code: §5 rewritten to the client-method/endpoint reality (agent_usage, doctor, memory_record/recall, agent_health, agent_context; CR-0015 URL-encoded path parameters; `caller_context` chat envelope; v4.36 SSE shape; crew-aware discovery + agent_label naming); tool-call sections replaced by the Option A actuation flow; §6 CoordinatorData/AgentInfo/options updated (NotRequired usage/doctor/tool_surface/read_only_safe; CR-0014 webhook push validation); §7 event table + webhook lifecycle (persistent id, stale-subscription cleanup, local-only/POST-only); §3.1/§8/§8a module tables + repo structure match the code (ai_task/diagnostics/drift/webhook added, tool_executor removed); new **ADR-006** (agent-owned `/api/mcp` actuation) supersedes ADR-005; §9 security + §13 constraints re-baselined (bridge v4.141.0 / HA 2026.2.3). |

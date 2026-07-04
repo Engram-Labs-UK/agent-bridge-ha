@@ -13,7 +13,7 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .client import BridgeClient, BridgeError
@@ -88,10 +88,14 @@ MEMORY_RECALL_SCHEMA = vol.Schema(
 
 
 def _get_entry_data(hass: HomeAssistant) -> dict[str, Any]:
-    """Get the first config entry's runtime data."""
+    """Get the first config entry's runtime data.
+
+    CR-0016: raises ``ServiceValidationError`` so HA reports a user-input
+    problem, not an internal error.
+    """
     entries = hass.data.get(DOMAIN, {})
     if not entries:
-        raise ValueError("Agent Bridge is not configured")
+        raise ServiceValidationError("Agent Bridge is not configured")
     entry_id = next(iter(entries))
     return entries[entry_id]
 
@@ -99,10 +103,10 @@ def _get_entry_data(hass: HomeAssistant) -> dict[str, Any]:
 def _validate_agent_id(coordinator: AgentBridgeCoordinator, agent_id: str) -> None:
     """Validate that agent_id exists in the coordinator's cached agent list."""
     if not coordinator.data:
-        raise ValueError("Bridge data not available")
+        raise ServiceValidationError("Bridge data not available")
     known_ids = {a["id"] for a in coordinator.data["agents"]}
     if agent_id not in known_ids:
-        raise ValueError(f"Unknown agent: {agent_id}")
+        raise ServiceValidationError(f"Unknown agent: {agent_id}")
 
 
 def _default_agent(hass: HomeAssistant) -> str | None:
@@ -126,6 +130,10 @@ async def async_handle_send_message(call: ServiceCall) -> ServiceResponse:
 
     if agent_id:
         _validate_agent_id(coordinator, agent_id)
+    else:
+        # CR-0016: fall back to the configured default agent (the documented
+        # behaviour, matching the memory services); None -> bridge routing.
+        agent_id = _default_agent(hass)
 
     messages = [{"role": "user", "content": message}]
 
@@ -195,6 +203,9 @@ async def async_handle_ask_with_image(call: ServiceCall) -> ServiceResponse:
 
     if agent_id:
         _validate_agent_id(coordinator, agent_id)
+    else:
+        # CR-0016: same default-agent fallback as send_message.
+        agent_id = _default_agent(hass)
 
     try:
         image = await async_get_image(hass, camera_entity_id, timeout=10)

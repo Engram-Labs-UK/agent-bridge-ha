@@ -15,6 +15,7 @@ from .const import (
     CONF_BRIDGE_URL,
     CONF_SSL_VERIFY,
     CONF_THINKING_TIMEOUT,
+    CONF_WEBHOOK_SUBSCRIPTION_ID,
     DEFAULT_THINKING_TIMEOUT,
     DOMAIN,
     PLATFORMS,
@@ -56,6 +57,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # agent -- the legacy direct-registration call is gone (US0025).
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Register webhook (Phase 2 -- graceful fallback to polling). CR-0014: runs
+    # BEFORE the options listener is added -- persisting the webhook/subscription
+    # ids updates the entry, which would otherwise trigger a reload loop.
+    from .webhook import (
+        async_cleanup_stale_subscription,
+        async_register_webhook,
+        async_register_with_bridge,
+    )
+
+    await async_cleanup_stale_subscription(hass, entry)
+    webhook_id = await async_register_webhook(hass, entry)
+    subscription_id = None
+    if webhook_id:
+        subscription_id = await async_register_with_bridge(hass, entry.entry_id, webhook_id)
+    hass.data[DOMAIN][entry.entry_id]["webhook_id"] = webhook_id
+    hass.data[DOMAIN][entry.entry_id]["webhook_subscription_id"] = subscription_id
+    if subscription_id and entry.data.get(CONF_WEBHOOK_SUBSCRIPTION_ID) != subscription_id:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_WEBHOOK_SUBSCRIPTION_ID: subscription_id}
+        )
+
     # Listen for options updates
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
@@ -63,16 +85,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .services import async_setup_services
 
     await async_setup_services(hass)
-
-    # Register webhook (Phase 2 -- graceful fallback to polling)
-    from .webhook import async_register_webhook, async_register_with_bridge
-
-    webhook_id = await async_register_webhook(hass, entry.entry_id)
-    subscription_id = None
-    if webhook_id:
-        subscription_id = await async_register_with_bridge(hass, entry.entry_id, webhook_id)
-    hass.data[DOMAIN][entry.entry_id]["webhook_id"] = webhook_id
-    hass.data[DOMAIN][entry.entry_id]["webhook_subscription_id"] = subscription_id
 
     # Drift defences (US0029): check agent-context now, and re-check whenever the
     # bridge announces an upgrade (the webhook fires EVENT_BRIDGE_UPGRADED, US0024).
