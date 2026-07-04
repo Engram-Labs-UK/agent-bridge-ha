@@ -105,6 +105,10 @@ async def _handle_webhook(
     except Exception:
         _LOGGER.warning("Invalid webhook payload received")
         return Response(status=400)
+    # BG0014: valid JSON that is not an object gets the same clean 400.
+    if not isinstance(payload, dict):
+        _LOGGER.warning("Invalid webhook payload received (not a JSON object)")
+        return Response(status=400)
 
     event_type = payload.get("event")
     event_data = payload.get("data", {})

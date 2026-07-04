@@ -201,6 +201,20 @@ class TestHandleWebhook:
         assert response.status == 400
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("payload", [[1, 2, 3], "x", 42, None, True])
+    async def test_non_object_json_payload_is_400(self, payload):
+        """BG0014: valid JSON that is not an object gets the same clean 400 as
+        unparseable JSON -- never an unhandled AttributeError."""
+        hass = MagicMock()
+        hass.data = {DOMAIN: {}}
+
+        request = MagicMock()
+        request.json = AsyncMock(return_value=payload)
+
+        response = await _handle_webhook(hass, "wh_123", request)
+        assert response.status == 400
+
+    @pytest.mark.asyncio
     async def test_coordinator_push(self):
         """Test that async_push_webhook_data updates coordinator state."""
         from custom_components.agent_bridge.coordinator import (

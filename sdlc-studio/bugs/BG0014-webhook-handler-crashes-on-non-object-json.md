@@ -6,7 +6,7 @@ Related: help/bug.md, reference-bug.md
 -->
 # BG0014: Webhook handler raises on valid-JSON-but-non-object payloads
 
-> **Status:** Open
+> **Status:** Fixed
 > **Severity:** Low
 > **Priority:** P3
 > **Reporter:** Code + security review (RV-requested, 2026-07-04)
@@ -51,22 +51,23 @@ The dict-shape assumption is implicit; only the JSON-parse failure mode is handl
 
 ## Fix Description
 
-_(to fill on fix)_ After parsing, `if not isinstance(payload, dict): return Response(status=400)` (or fold into the existing except by validating inside the try).
+After the JSON parse, `if not isinstance(payload, dict): return Response(status=400)` with the same "Invalid webhook payload" warning as the parse failure.
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| — | — |
+| `webhook.py` | non-object payload guard after `request.json()` |
+| `tests/test_webhook.py` | parametrised: `[1,2,3]` / `"x"` / `42` / `null` / `true` all return 400 |
 
 ---
 
 ## Verification
 
-- [ ] Fix verified in development (unit)
+- [x] Fix verified in development (unit) — TDD: 5 parametrised cases red first, green after; suite 335 passed
 
-**Verified by:** —
-**Verification date:** —
+**Verified by:** unit tests (`tests/test_webhook.py::TestHandleWebhook::test_non_object_json_payload_is_400`)
+**Verification date:** 2026-07-04
 **Verification depth:** functional
 
 ---
